@@ -16,6 +16,7 @@ const RNG: VendorCommand = VendorCommand::H60;
 const VERSION: VendorCommand = VendorCommand::H61;
 const UUID: VendorCommand = VendorCommand::H62;
 const LOCKED: VendorCommand = VendorCommand::H63;
+const BUTTON_STATE: VendorCommand = VendorCommand::H64;
 
 pub trait Reboot {
     /// Reboots the device.
@@ -79,6 +80,7 @@ where T: TrussedClient,
             HidCommand::Vendor(VERSION),
             HidCommand::Vendor(UUID),
             HidCommand::Vendor(LOCKED),
+            HidCommand::Vendor(BUTTON_STATE),
         ]
     }
 
@@ -114,6 +116,10 @@ where T: TrussedClient,
             HidCommand::Vendor(VERSION) => {
                 // GET VERSION
                 response.extend_from_slice(&self.version.to_be_bytes()).ok();
+            }
+            HidCommand::Vendor(BUTTON_STATE) => {
+                let button_pressed = syscall!(self.trussed.confirm_user_present(1)).result.is_ok();
+                response.push(u8::from(button_pressed)).ok();
             }
             HidCommand::Wink => {
                 debug_now!("winking");
@@ -187,6 +193,10 @@ where T: TrussedClient,
             VERSION => {
                 // Get version
                 reply.extend_from_slice(&self.version.to_be_bytes()[..]).ok();
+            }
+            BUTTON_STATE => {
+                let button_pressed = syscall!(self.trussed.confirm_user_present(1)).result.is_ok();
+                reply.push(u8::from(button_pressed)).ok();
             }
 
             _ => return Err(Status::InstructionNotSupportedOrInvalid),
