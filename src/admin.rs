@@ -140,6 +140,7 @@ where T: TrussedClient,
     trussed: T,
     uuid: [u8; 16],
     version: u32,
+    full_version: &'static str,
     boot_interface: PhantomData<R>,
 }
 
@@ -147,8 +148,8 @@ impl<T, R> App<T, R>
 where T: TrussedClient,
       R: Reboot,
 {
-    pub fn new(client: T, uuid: [u8; 16], version: u32) -> Self {
-        Self { trussed: client, uuid, version, boot_interface: PhantomData }
+    pub fn new(client: T, uuid: [u8; 16], version: u32, full_version: &'static str) -> Self {
+        Self { trussed: client, uuid, version, full_version, boot_interface: PhantomData }
     }
 
     fn user_present(&mut self) -> bool {
@@ -185,7 +186,11 @@ where T: TrussedClient,
             }
             Command::Version => {
                 // GET VERSION
-                response.extend_from_slice(&self.version.to_be_bytes()).ok();
+                if flag == Some(0x01) {
+                    response.extend_from_slice(self.full_version.as_bytes()).ok();
+                } else {
+                    response.extend_from_slice(&self.version.to_be_bytes()).ok();
+                }
             }
             Command::Wink => {
                 debug_now!("winking");
