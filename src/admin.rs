@@ -14,6 +14,7 @@ pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 // New commands are only available over this vendor command (acting as a namespace for this
 // application).  The actual application command is stored in the first byte of the packet data.
 const ADMIN: VendorCommand = VendorCommand::H72;
+const STATUS: u8 = 0x80;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -37,6 +38,7 @@ enum Command {
     Uuid,
     Locked,
     Wink,
+    Status,
 }
 
 impl TryFrom<u8> for Command {
@@ -50,8 +52,11 @@ impl TryFrom<u8> for Command {
             }
         }
 
-        // Now check the new commands (none yet).
-        Err(Error::UnsupportedCommand)
+        // Now check the new commands.
+        match command {
+            STATUS => Ok(Command::Status),
+            _ => Err(Error::UnsupportedCommand),
+        }
     }
 }
 
@@ -140,6 +145,8 @@ where T: TrussedClient,
     trussed: T,
     uuid: [u8; 16],
     version: u32,
+    full_version: &'static str,
+    init_status: u8,
     boot_interface: PhantomData<R>,
 }
 
@@ -147,8 +154,8 @@ impl<T, R> App<T, R>
 where T: TrussedClient,
       R: Reboot,
 {
-    pub fn new(client: T, uuid: [u8; 16], version: u32) -> Self {
-        Self { trussed: client, uuid, version, boot_interface: PhantomData }
+    pub fn new(client: T, uuid: [u8; 16], version: u32, full_version: &'static str, init_status: u8) -> Self {
+        Self { trussed: client, uuid, version, full_version, init_status, boot_interface: PhantomData }
     }
 
     fn user_present(&mut self) -> bool {
@@ -185,11 +192,20 @@ where T: TrussedClient,
             }
             Command::Version => {
                 // GET VERSION
-                response.extend_from_slice(&self.version.to_be_bytes()).ok();
+                if flag == Some(0x01) {
+                    response.extend_from_slice(self.full_version.as_bytes()).ok();
+                } else {
+                    response.extend_from_slice(&self.version.to_be_bytes()).ok();
+                }
             }
             Command::Wink => {
                 debug_now!("winking");
                 syscall!(self.trussed.wink(Duration::from_secs(10)));
+            }
+            Command::Status => {
+                // The first response byte is the init status as set by the runner (0 = success).
+                // More bytes might be added in the future.
+                response.push(self.init_status).ok();
             }
         }
         Ok(())
