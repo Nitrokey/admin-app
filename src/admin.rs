@@ -138,24 +138,28 @@ pub trait Reboot {
     fn locked() -> bool;
 }
 
-pub struct App<T, R>
-where T: TrussedClient,
-      R: Reboot,
+pub struct App<T, R, S>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
 {
     trussed: T,
     uuid: [u8; 16],
     version: u32,
     full_version: &'static str,
-    init_status: u8,
+    status: S,
     boot_interface: PhantomData<R>,
 }
 
-impl<T, R> App<T, R>
-where T: TrussedClient,
-      R: Reboot,
+impl<T, R, S> App<T, R, S>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
 {
-    pub fn new(client: T, uuid: [u8; 16], version: u32, full_version: &'static str, init_status: u8) -> Self {
-        Self { trussed: client, uuid, version, full_version, init_status, boot_interface: PhantomData }
+    pub fn new(client: T, uuid: [u8; 16], version: u32, full_version: &'static str, status: S) -> Self {
+        Self { trussed: client, uuid, version, full_version, status, boot_interface: PhantomData }
     }
 
     fn user_present(&mut self) -> bool {
@@ -203,18 +207,18 @@ where T: TrussedClient,
                 syscall!(self.trussed.wink(Duration::from_secs(10)));
             }
             Command::Status => {
-                // The first response byte is the init status as set by the runner (0 = success).
-                // More bytes might be added in the future.
-                response.push(self.init_status).ok();
+                response.extend_from_slice(self.status.as_ref()).ok();
             }
         }
         Ok(())
     }
 }
 
-impl<T, R> hid::App for App<T, R>
-where T: TrussedClient,
-      R: Reboot
+impl<T, R, S> hid::App for App<T, R, S>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
 {
     fn commands(&self) -> &'static [HidCommand] {
         &[
@@ -243,9 +247,11 @@ where T: TrussedClient,
     }
 }
 
-impl<T, R> iso7816::App for App<T, R>
-where T: TrussedClient,
-      R: Reboot
+impl<T, R, S> iso7816::App for App<T, R, S>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
 {
     // Solo management app
     fn aid(&self) -> iso7816::Aid {
@@ -253,9 +259,11 @@ where T: TrussedClient,
     }
 }
 
-impl<T, R> apdu::App<{command::SIZE}, {response::SIZE}> for App<T, R>
-where T: TrussedClient,
-      R: Reboot
+impl<T, R, S> apdu::App<{command::SIZE}, {response::SIZE}> for App<T, R, S>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
 {
 
     fn select(&mut self, _apdu: &ApduCommand, _reply: &mut response::Data) -> apdu::Result {
