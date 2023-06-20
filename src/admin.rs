@@ -1,13 +1,9 @@
+use apdu_dispatch::iso7816::Status;
+use apdu_dispatch::{app as apdu, command, response, Command as ApduCommand};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
-use apdu_dispatch::{Command as ApduCommand, command, response, app as apdu};
-use apdu_dispatch::iso7816::Status;
-use trussed::{
-    types::Vec,
-    syscall,
-    Client as TrussedClient,
-};
+use trussed::{syscall, types::Vec, Client as TrussedClient};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -25,7 +21,7 @@ const UUID: VendorCommand = VendorCommand::H62;
 const LOCKED: VendorCommand = VendorCommand::H63;
 
 // We also handle the standard wink command.
-const WINK: HidCommand = HidCommand::Wink;  // 0x08
+const WINK: HidCommand = HidCommand::Wink; // 0x08
 
 const RNG_DATA_LEN: usize = 57;
 
@@ -67,7 +63,7 @@ impl TryFrom<HidCommand> for Command {
         match command {
             WINK => Ok(Command::Wink),
             HidCommand::Vendor(command) => command.try_into(),
-            _ => Err(Error::UnsupportedCommand)
+            _ => Err(Error::UnsupportedCommand),
         }
     }
 }
@@ -158,16 +154,37 @@ where
     R: Reboot,
     S: AsRef<[u8]>,
 {
-    pub fn new(client: T, uuid: [u8; 16], version: u32, full_version: &'static str, status: S) -> Self {
-        Self { trussed: client, uuid, version, full_version, status, boot_interface: PhantomData }
+    pub fn new(
+        client: T,
+        uuid: [u8; 16],
+        version: u32,
+        full_version: &'static str,
+        status: S,
+    ) -> Self {
+        Self {
+            trussed: client,
+            uuid,
+            version,
+            full_version,
+            status,
+            boot_interface: PhantomData,
+        }
     }
 
     fn user_present(&mut self) -> bool {
-        let user_present = syscall!(self.trussed.confirm_user_present(USER_PRESENCE_TIMEOUT_SECS * 1000)).result;
+        let user_present = syscall!(self
+            .trussed
+            .confirm_user_present(USER_PRESENCE_TIMEOUT_SECS * 1000))
+        .result;
         user_present.is_ok()
     }
 
-    fn exec<const N: usize>(&mut self, command: Command, flag: Option<u8>, response: &mut Vec<u8, N>) -> Result<(), Error> {
+    fn exec<const N: usize>(
+        &mut self,
+        command: Command,
+        flag: Option<u8>,
+        response: &mut Vec<u8, N>,
+    ) -> Result<(), Error> {
         match command {
             Command::Reboot => R::reboot(),
             Command::Locked => {
@@ -175,9 +192,9 @@ where
             }
             Command::Rng => {
                 // Fill the HID packet (57 bytes)
-                response.extend_from_slice(
-                    &syscall!(self.trussed.random_bytes(RNG_DATA_LEN)).bytes,
-                ).ok();
+                response
+                    .extend_from_slice(&syscall!(self.trussed.random_bytes(RNG_DATA_LEN)).bytes)
+                    .ok();
             }
             Command::Update => {
                 if self.user_present() {
@@ -197,7 +214,9 @@ where
             Command::Version => {
                 // GET VERSION
                 if flag == Some(0x01) {
-                    response.extend_from_slice(self.full_version.as_bytes()).ok();
+                    response
+                        .extend_from_slice(self.full_version.as_bytes())
+                        .ok();
                 } else {
                     response.extend_from_slice(&self.version.to_be_bytes()).ok();
                 }
@@ -233,7 +252,12 @@ where
         ]
     }
 
-    fn call(&mut self, command: HidCommand, input_data: &Message, response: &mut Message) -> hid::AppResult {
+    fn call(
+        &mut self,
+        command: HidCommand,
+        input_data: &Message,
+        response: &mut Message,
+    ) -> hid::AppResult {
         let (command, flag) = if command == HidCommand::Vendor(ADMIN) {
             // new mode: first input byte specifies the actual command
             let (command, input) = input_data.split_first().ok_or(Error::InvalidLength)?;
@@ -243,7 +267,8 @@ where
             // old mode: directly use vendor commands + wink
             (Command::try_from(command)?, input_data.first())
         };
-        self.exec(command, flag.copied(), response).map_err(From::from)
+        self.exec(command, flag.copied(), response)
+            .map_err(From::from)
     }
 }
 
@@ -255,24 +280,28 @@ where
 {
     // Solo management app
     fn aid(&self) -> iso7816::Aid {
-        iso7816::Aid::new(&[ 0xA0, 0x00, 0x00, 0x08, 0x47, 0x00, 0x00, 0x00, 0x01])
+        iso7816::Aid::new(&[0xA0, 0x00, 0x00, 0x08, 0x47, 0x00, 0x00, 0x00, 0x01])
     }
 }
 
-impl<T, R, S> apdu::App<{command::SIZE}, {response::SIZE}> for App<T, R, S>
+impl<T, R, S> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
 {
-
     fn select(&mut self, _apdu: &ApduCommand, _reply: &mut response::Data) -> apdu::Result {
         Ok(())
     }
 
     fn deselect(&mut self) {}
 
-    fn call(&mut self, interface: apdu::Interface, apdu: &ApduCommand, reply: &mut response::Data) -> apdu::Result {
+    fn call(
+        &mut self,
+        interface: apdu::Interface,
+        apdu: &ApduCommand,
+        reply: &mut response::Data,
+    ) -> apdu::Result {
         let instruction: u8 = apdu.instruction().into();
         let command = Command::try_from(instruction)?;
 
@@ -284,4 +313,3 @@ where
         self.exec(command, Some(apdu.p1), reply).map_err(From::from)
     }
 }
-
