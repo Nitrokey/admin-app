@@ -3,7 +3,7 @@ use apdu_dispatch::{app as apdu, command, response, Command as ApduCommand};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
-use trussed::{syscall, types::Vec, Client as TrussedClient};
+use trussed::{interrupt::InterruptFlag, syscall, types::Vec, Client as TrussedClient};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -233,7 +233,7 @@ where
     }
 }
 
-impl<T, R, S> hid::App for App<T, R, S>
+impl<T, R, S> hid::App<'static> for App<T, R, S>
 where
     T: TrussedClient,
     R: Reboot,
@@ -269,6 +269,10 @@ where
         };
         self.exec(command, flag.copied(), response)
             .map_err(From::from)
+    }
+
+    fn interrupt(&self) -> Option<&'static InterruptFlag> {
+        self.trussed.interrupt()
     }
 }
 
