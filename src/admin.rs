@@ -104,9 +104,9 @@ impl From<Error> for hid::Error {
 impl From<Error> for Status {
     fn from(error: Error) -> Self {
         match error {
-            Error::InvalidLength => Self::WrongLength,
-            Error::NotAvailable => Self::ConditionsOfUseNotSatisfied,
-            Error::UnsupportedCommand => Self::InstructionNotSupportedOrInvalid,
+            Error::InvalidLength => Self(0x6700),
+            Error::NotAvailable => Self::CONDITION_OF_USE_NOT_SATISFIED,
+            Error::UnsupportedCommand => Self::INSTRUCTION_NOT_SUPPORTED_OR_INVALID,
         }
     }
 }
@@ -311,7 +311,7 @@ where
 
         // Reboot may only be called over USB
         if command == Command::Reboot && interface != apdu::Interface::Contact {
-            return Err(Status::ConditionsOfUseNotSatisfied);
+            return Err(Status::CONDITION_OF_USE_NOT_SATISFIED);
         }
 
         self.exec(command, Some(apdu.p1), reply).map_err(From::from)
