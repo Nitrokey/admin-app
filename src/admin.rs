@@ -3,6 +3,10 @@ use apdu_dispatch::{app as apdu, command, response, Command as ApduCommand};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
+#[cfg(feature = "se050")]
+use embedded_hal::blocking::delay::DelayUs;
+#[cfg(feature = "se050")]
+use se050::{se050::Se050, t1::I2CForT1};
 use trussed::{interrupt::InterruptFlag, syscall, types::Vec, Client as TrussedClient};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
@@ -11,6 +15,7 @@ pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 // application).  The actual application command is stored in the first byte of the packet data.
 const ADMIN: VendorCommand = VendorCommand::H72;
 const STATUS: u8 = 0x80;
+const TEST_SE050: u8 = 0x81;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -25,7 +30,19 @@ const WINK: HidCommand = HidCommand::Wink; // 0x08
 
 const RNG_DATA_LEN: usize = 57;
 
-#[derive(PartialEq)]
+mod run_tests;
+use run_tests::*;
+
+/// Trait representing the possible ownership of the SE050 by the admin app.
+///
+/// Implemented by `()` and the `Se050` stract
+pub trait MaybeSe: RunTests {}
+
+impl MaybeSe for () {}
+#[cfg(feature = "se050")]
+impl<Twi: I2CForT1, D: DelayUs<u32>> MaybeSe for Se050<Twi, D> {}
+
+#[derive(PartialEq, Debug)]
 enum Command {
     Update,
     Reboot,
@@ -35,6 +52,7 @@ enum Command {
     Locked,
     Wink,
     Status,
+    TestSe050,
 }
 
 impl TryFrom<u8> for Command {
@@ -51,6 +69,7 @@ impl TryFrom<u8> for Command {
         // Now check the new commands.
         match command {
             STATUS => Ok(Command::Status),
+            TEST_SE050 => Ok(Command::TestSe050),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -134,7 +153,7 @@ pub trait Reboot {
     fn locked() -> bool;
 }
 
-pub struct App<T, R, S>
+pub struct App<T, R, S, Se050 = ()>
 where
     T: TrussedClient,
     R: Reboot,
@@ -146,6 +165,7 @@ where
     full_version: &'static str,
     status: S,
     boot_interface: PhantomData<R>,
+    se050: Se050,
 }
 
 impl<T, R, S> App<T, R, S>
@@ -168,9 +188,47 @@ where
             full_version,
             status,
             boot_interface: PhantomData,
+            se050: (),
         }
     }
+}
 
+#[cfg(feature = "se050")]
+impl<T, R, S, Twi, D> App<T, R, S, Se050<Twi, D>>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
+    Twi: I2CForT1,
+    D: DelayUs<u32>,
+{
+    pub fn with_se(
+        client: T,
+        uuid: [u8; 16],
+        version: u32,
+        full_version: &'static str,
+        status: S,
+        se050: Se050<Twi, D>,
+    ) -> Self {
+        Self {
+            trussed: client,
+            uuid,
+            version,
+            full_version,
+            status,
+            boot_interface: PhantomData,
+            se050,
+        }
+    }
+}
+
+impl<T, R, S, Se050> App<T, R, S, Se050>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
+    Se050: MaybeSe,
+{
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
@@ -185,6 +243,7 @@ where
         flag: Option<u8>,
         response: &mut Vec<u8, N>,
     ) -> Result<(), Error> {
+        debug_now!("Executing command: {command:?}");
         match command {
             Command::Reboot => R::reboot(),
             Command::Locked => {
@@ -228,16 +287,23 @@ where
             Command::Status => {
                 response.extend_from_slice(self.status.as_ref()).ok();
             }
+            Command::TestSe050 => {
+                debug_now!("Running se050 tests");
+                if let Err(_err) = self.se050.run_tests(response) {
+                    debug_now!("se050 tests failed: {_err:?}");
+                }
+            }
         }
         Ok(())
     }
 }
 
-impl<T, R, S> hid::App<'static> for App<T, R, S>
+impl<T, R, S, Se> hid::App<'static> for App<T, R, S, Se>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    Se: MaybeSe,
 {
     fn commands(&self) -> &'static [HidCommand] {
         &[
@@ -276,11 +342,12 @@ where
     }
 }
 
-impl<T, R, S> iso7816::App for App<T, R, S>
+impl<T, R, S, Se> iso7816::App for App<T, R, S, Se>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    Se: MaybeSe,
 {
     // Solo management app
     fn aid(&self) -> iso7816::Aid {
@@ -288,11 +355,12 @@ where
     }
 }
 
-impl<T, R, S> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S>
+impl<T, R, S, Se> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S, Se>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    Se: MaybeSe,
 {
     fn select(&mut self, _apdu: &ApduCommand, _reply: &mut response::Data) -> apdu::Result {
         Ok(())
