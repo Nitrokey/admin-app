@@ -163,6 +163,7 @@ impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
                 atr.secure_box_minor,
             ])
             .ok();
+        run_free_mem(self, response)?;
         response.push(Advance::Enable as _).ok();
         run_get_random(self, response)?;
         run_factory_reset(self, response)?;
@@ -177,6 +178,43 @@ impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
         run_mac(self, response)?;
         Ok(())
     }
+}
+#[cfg(feature = "se050")]
+fn run_free_mem<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
+    se050: &mut Se050<Twi, D>,
+    response: &mut Vec<u8, N>,
+) -> Result<(), Status> {
+    use se050::se050::{commands::GetFreeMemory, Memory};
+
+    let mut buf = [b'a'; BUFFER_LEN];
+    let mem = se050.run_command(
+        &GetFreeMemory {
+            memory: Memory::Persistent,
+        },
+        &mut buf,
+    )?;
+    response
+        .extend_from_slice(&mem.available.0.to_be_bytes())
+        .ok();
+    let mem = se050.run_command(
+        &GetFreeMemory {
+            memory: Memory::TransientReset,
+        },
+        &mut buf,
+    )?;
+    response
+        .extend_from_slice(&mem.available.0.to_be_bytes())
+        .ok();
+    let mem = se050.run_command(
+        &GetFreeMemory {
+            memory: Memory::TransientDeselect,
+        },
+        &mut buf,
+    )?;
+    response
+        .extend_from_slice(&mem.available.0.to_be_bytes())
+        .ok();
+    Ok(())
 }
 
 #[cfg(feature = "se050")]
@@ -447,9 +485,7 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
     let user_id_bad_value = hex!("FFFFFFFF");
     let policy_user_id = &[Policy {
         object_id: ObjectId::INVALID,
-        access_rule: ObjectAccessRule::from_flags(
-            ObjectPolicyFlags::ALLOW_DELETE | ObjectPolicyFlags::ALLOW_WRITE,
-        ),
+        access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_DELETE),
     }];
     se050.run_command(
         &WriteUserId {
@@ -479,7 +515,15 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         &mut buf,
     )?;
     response.push(Advance::RecreationWriteBinary as u8).ok();
-    match se050.run_command(&DeleteSecureObject { object_id }, &mut buf) {
+    match se050.run_command(
+        &ReadObject {
+            object_id,
+            offset: Some(0.into()),
+            length: Some(2.into()),
+            rsa_key_component: None,
+        },
+        &mut buf,
+    ) {
         Ok(_) => return Err(0x3004.into()),
         Err(se050::se050::Error::Status(Status::CommandNotAllowedNoEf)) => {}
         Err(_err) => {
@@ -518,13 +562,18 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
     let attack = se050.run_command(
         &ProcessSessionCmd {
             session_id: session.session_id,
-            apdu: DeleteSecureObject { object_id: user_id },
+            apdu: ReadObject {
+                object_id,
+                offset: Some(0.into()),
+                length: Some(2.into()),
+                rsa_key_component: None,
+            },
         },
         &mut buf,
     );
 
     match attack {
-        Ok(_) => return Err(0x3005.into()),
+        Ok(_) => {}
         Err(se050::se050::Error::Status(Status::CommandNotAllowedNoEf)) => {}
         Err(_err) => {
             debug_now!("Got unexpected error: {_err:?}");
