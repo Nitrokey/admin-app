@@ -131,6 +131,22 @@ enum Advance {
     MacVerifyFinal,
     MacVerifyDelete,
     MacDelete,
+    AesSessionCreateKey,
+    AesSessionCreateBinary,
+    AesSessionCreateSession,
+    AesSessionAuthenticate,
+    AesSessionReadBinary,
+    AesSessionUpdateKey,
+    AesSessionCloseSession,
+    AesSessionRecreateSession,
+    AesSessionReAuthenticate,
+    AesSessionReadBinary2,
+    AesSessionDeleteBinary,
+    AesSessionDeleteKey,
+    Pbkdf2WritePin,
+    Pbkdf2Calculate,
+    Pbkdf2Compare,
+    Pbkdf2DeletePin,
 }
 
 impl RunTests for () {}
@@ -176,6 +192,8 @@ impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
         run_rsa4096(self, response)?;
         run_symm(self, response)?;
         run_mac(self, response)?;
+        run_aes_session(self, response)?;
+        run_pbkdf(self, response)?;
         Ok(())
     }
 }
@@ -1084,5 +1102,206 @@ fn run_mac<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
     se050.run_command(&DeleteSecureObject { object_id: key_id }, &mut buf2)?;
     response.push(Advance::MacDelete as u8).ok();
+    Ok(())
+}
+
+#[cfg(feature = "se050")]
+fn run_aes_session<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
+    se050: &mut Se050<Twi, D>,
+    response: &mut Vec<u8, N>,
+) -> Result<(), Status> {
+    use rand_chacha::rand_core::SeedableRng;
+    use se050::se050::{
+        commands::{CloseSession, WriteSymmKey},
+        SymmKeyType,
+    };
+
+    let mut buf = [0; 1024];
+    let key = [0x42; 16];
+    let key2 = [0x43; 16];
+    let key_id = ObjectId(hex!("03445566"));
+    let bin_id = ObjectId(hex!("03445567"));
+    let bin_data = hex!("CAFECAFE");
+    let key_policy = &[
+        Policy {
+            object_id: key_id,
+            access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_WRITE),
+        },
+        Policy {
+            object_id: ObjectId::INVALID,
+            access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_DELETE),
+        },
+    ];
+    let bin_policy = &[
+        Policy {
+            object_id: key_id,
+            access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_READ),
+        },
+        Policy {
+            object_id: ObjectId::INVALID,
+            access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_DELETE),
+        },
+    ];
+    se050.run_command(
+        &WriteSymmKey {
+            transient: false,
+            is_auth: true,
+            key_type: SymmKeyType::Aes,
+            policy: Some(PolicySet(key_policy)),
+            max_attempts: None,
+            object_id: key_id,
+            kek_id: None,
+            value: &key,
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::AesSessionCreateKey as _).ok();
+    se050.run_command(
+        &WriteBinary {
+            transient: false,
+            policy: Some(PolicySet(bin_policy)),
+            object_id: bin_id,
+            offset: None,
+            file_length: Some((bin_data.len() as u16).into()),
+            data: Some(&bin_data),
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::AesSessionCreateBinary as _).ok();
+
+    let session = se050.run_command(&CreateSession { object_id: key_id }, &mut buf)?;
+    let session_id = session.session_id;
+    response.push(Advance::AesSessionCreateSession as u8).ok();
+    debug_now!("Created session");
+
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([0xCA; 32]);
+    se050.authenticate_aes128_session(session_id, &key, &mut rng)?;
+    response.push(Advance::AesSessionAuthenticate as u8).ok();
+
+    let data = se050.run_command(
+        &ProcessSessionCmd {
+            session_id,
+            apdu: ReadObject {
+                object_id: bin_id,
+                offset: None,
+                length: Some((bin_data.len() as u16).into()),
+                rsa_key_component: None,
+            },
+        },
+        &mut buf,
+    )?;
+    assert_eq!(data.data, &bin_data);
+    response.push(Advance::AesSessionReadBinary as _).ok();
+
+    se050.run_command(
+        &ProcessSessionCmd {
+            session_id,
+            apdu: WriteSymmKey {
+                transient: false,
+                is_auth: true,
+                key_type: SymmKeyType::Aes,
+                policy: None,
+                max_attempts: None,
+                object_id: key_id,
+                kek_id: None,
+                value: &key2,
+            },
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::AesSessionUpdateKey as _).ok();
+
+    se050.run_command(
+        &ProcessSessionCmd {
+            session_id,
+            apdu: CloseSession {},
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::AesSessionCloseSession as _).ok();
+
+    let session = se050.run_command(&CreateSession { object_id: key_id }, &mut buf)?;
+    let session_id = session.session_id;
+    response.push(Advance::AesSessionRecreateSession as u8).ok();
+    debug_now!("Created session");
+
+    let mut rng = rand_chacha::ChaCha8Rng::from_seed([0xCA; 32]);
+    se050.authenticate_aes128_session(session_id, &key2, &mut rng)?;
+    response.push(Advance::AesSessionReAuthenticate as u8).ok();
+
+    let data = se050.run_command(
+        &ProcessSessionCmd {
+            session_id,
+            apdu: ReadObject {
+                object_id: bin_id,
+                offset: None,
+                length: Some((bin_data.len() as u16).into()),
+                rsa_key_component: None,
+            },
+        },
+        &mut buf,
+    )?;
+    assert_eq!(data.data, &bin_data);
+    response.push(Advance::AesSessionReadBinary2 as _).ok();
+
+    se050.run_command(&DeleteSecureObject { object_id: bin_id }, &mut buf)?;
+    response.push(Advance::AesSessionDeleteBinary as _).ok();
+    se050.run_command(&DeleteSecureObject { object_id: key_id }, &mut buf)?;
+    response.push(Advance::AesSessionDeleteKey as _).ok();
+
+    Ok(())
+}
+
+#[cfg(feature = "se050")]
+fn run_pbkdf<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
+    se050: &mut Se050<Twi, D>,
+    response: &mut Vec<u8, N>,
+) -> Result<(), Status> {
+    use se050::se050::{
+        commands::{Pbkdf2, WriteSymmKey},
+        SymmKeyType,
+    };
+
+    let mut buf = [0; 1024];
+    let pin = b"123456";
+    let salt = [0x42; 16];
+    let pin_id = ObjectId(hex!("03445566"));
+
+    se050.run_command(
+        &WriteSymmKey {
+            transient: true,
+            is_auth: false,
+            key_type: SymmKeyType::Hmac,
+            policy: None,
+            max_attempts: None,
+            object_id: pin_id,
+            kek_id: None,
+            value: pin,
+        },
+        &mut buf,
+    )?;
+
+    response.push(Advance::Pbkdf2WritePin as u8).ok();
+
+    let res = se050.run_command(
+        &Pbkdf2 {
+            password: pin_id,
+            salt: Some(&salt),
+            iterations: 32.into(),
+            requested_len: 16.into(),
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::Pbkdf2Calculate as u8).ok();
+
+    if res.data != hex!("685126241d909137ecd3385eaea2725f") {
+        debug_now!("Got HASH: {:02x?}", res.data);
+        return Err(Status::CorruptedData);
+    }
+    response.push(Advance::Pbkdf2Compare as u8).ok();
+
+    se050.run_command(&DeleteSecureObject { object_id: pin_id }, &mut buf)?;
+    response.push(Advance::Pbkdf2DeletePin as u8).ok();
+
     Ok(())
 }
