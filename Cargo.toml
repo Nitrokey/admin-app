@@ -36,4 +36,4 @@ log-error = []
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
 trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "51e68500d7601d04f884f5e95567d14b9018a6cb" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
-se050 = { git = "https://github.com/sosthene-nitrokey/se050-generation.git", rev = "b4dc057ed7b3e1dda88a8c1314f77048df961b10"} 
+se050 = { git = "https://github.com/sosthene-nitrokey/se050-generation.git", rev = "b1c9479698ae8afe36d6158a91f988d212d8aaa0"} 

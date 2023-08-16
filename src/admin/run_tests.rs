@@ -147,6 +147,15 @@ enum Advance {
     Pbkdf2Calculate,
     Pbkdf2Compare,
     Pbkdf2DeletePin,
+    ImportWrite,
+    ImportCipher,
+    ImportExport,
+    ImportDelete,
+    ImportDeletionWorked,
+    ImportImport,
+    ImportCipher2,
+    ImportComp,
+    ImportDeleteFinal,
 }
 
 impl RunTests for () {}
@@ -194,6 +203,7 @@ impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
         run_mac(self, response)?;
         run_aes_session(self, response)?;
         run_pbkdf(self, response)?;
+        run_export_import(self, response)?;
         Ok(())
     }
 }
@@ -1303,5 +1313,134 @@ fn run_pbkdf<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
     se050.run_command(&DeleteSecureObject { object_id: pin_id }, &mut buf)?;
     response.push(Advance::Pbkdf2DeletePin as u8).ok();
 
+    Ok(())
+}
+
+#[cfg(feature = "se050")]
+fn run_export_import<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
+    se050: &mut Se050<Twi, D>,
+    response: &mut Vec<u8, N>,
+) -> Result<(), Status> {
+    use se050::se050::{
+        commands::{CipherOneShotEncrypt, ExportObject, ImportObject, WriteSymmKey},
+        CipherMode, RsaKeyComponent, SymmKeyType,
+    };
+
+    let mut buf = [0; 128];
+    let mut buf2 = [0; 1000];
+    let mut buf3 = [0; 1000];
+    let plaintext_data = [2; 32];
+    let key_id = ObjectId(hex!("03445566"));
+    let key = [0x42; 32];
+    let iv = [0xFF; 16];
+    let policy = &[
+        Policy {
+            object_id: ObjectId::INVALID,
+            access_rule: ObjectAccessRule::from_flags(
+                ObjectPolicyFlags::ALLOW_WRITE
+                    | ObjectPolicyFlags::ALLOW_ENC
+                    | ObjectPolicyFlags::ALLOW_DELETE
+                    | ObjectPolicyFlags::ALLOW_IMPORT_EXPORT,
+            ),
+        },
+        Policy {
+            object_id: ObjectId::INVALID,
+            access_rule: ObjectAccessRule::from_flags(ObjectPolicyFlags::ALLOW_DELETE),
+        },
+    ];
+    se050.run_command(
+        &WriteSymmKey {
+            transient: true,
+            is_auth: false,
+            key_type: SymmKeyType::Aes,
+            policy: Some(PolicySet(policy)),
+            max_attempts: None,
+            object_id: key_id,
+            kek_id: None,
+            value: &key,
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::ImportWrite as u8).ok();
+    let ciphertext1 = se050.run_command(
+        &CipherOneShotEncrypt {
+            key_id,
+            mode: CipherMode::AesCtr,
+            plaintext: &plaintext_data,
+            initialization_vector: Some(&iv),
+        },
+        &mut buf,
+    )?;
+    response.push(Advance::ImportCipher as u8).ok();
+
+    debug_now!("Exporting");
+    let exported = se050
+        .run_command(
+            &ExportObject {
+                object_id: key_id,
+                rsa_key_component: RsaKeyComponent::Na,
+            },
+            &mut buf2,
+        )
+        .map_err(|_err| {
+            debug_now!("Got err: {:?}", _err);
+            _err
+        })?;
+    response.push(Advance::ImportExport as u8).ok();
+
+    se050.enable()?;
+    response.push(Advance::ImportDelete as u8).ok();
+
+    let res = se050.run_command(
+        &CipherOneShotEncrypt {
+            key_id,
+            mode: CipherMode::AesCtr,
+            plaintext: &plaintext_data,
+            initialization_vector: Some(&iv),
+        },
+        &mut buf3,
+    );
+    if !matches!(
+        res,
+        Err(se050::se050::Error::Status(
+            Status::ConditionsOfUseNotSatisfied,
+        ))
+    ) {
+        return Err((0x3000 + line!() as u16).into());
+    }
+    response.push(Advance::ImportDeletionWorked as u8).ok();
+
+    debug_now!("Importing");
+    se050.run_command(
+        &ImportObject {
+            transient: true,
+            object_id: key_id,
+            rsa_key_component: None,
+            serialized_object: exported.data,
+        },
+        &mut buf3,
+    )?;
+    response.push(Advance::ImportImport as u8).ok();
+
+    debug_now!("Encrypting");
+    let ciphertext2 = se050.run_command(
+        &CipherOneShotEncrypt {
+            key_id,
+            mode: CipherMode::AesCtr,
+            plaintext: &plaintext_data,
+            initialization_vector: Some(&iv),
+        },
+        &mut buf3,
+    )?;
+    response.push(Advance::ImportCipher2 as u8).ok();
+
+    debug_now!("Comparing");
+    if ciphertext1.ciphertext != ciphertext2.ciphertext {
+        return Err((0x3000 + line!() as u16).into());
+    }
+    response.push(Advance::ImportComp as u8).ok();
+
+    se050.run_command(&DeleteSecureObject { object_id: key_id }, &mut buf3)?;
+    response.push(Advance::ImportDeleteFinal as u8).ok();
     Ok(())
 }
