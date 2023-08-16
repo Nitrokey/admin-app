@@ -6,7 +6,7 @@ use ctaphid_dispatch::command::VendorCommand;
 #[cfg(feature = "se050")]
 use embedded_hal::blocking::delay::DelayUs;
 #[cfg(feature = "se050")]
-use se050::{se050::Se050, t1::I2CForT1};
+use se05x::{se05x::Se05X, t1::I2CForT1};
 use trussed::{interrupt::InterruptFlag, syscall, types::Vec, Client as TrussedClient};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
@@ -35,12 +35,12 @@ use run_tests::*;
 
 /// Trait representing the possible ownership of the SE050 by the admin app.
 ///
-/// Implemented by `()` and the `Se050` stract
+/// Implemented by `()` and the `Se05X` stract
 pub trait MaybeSe: RunTests {}
 
 impl MaybeSe for () {}
 #[cfg(feature = "se050")]
-impl<Twi: I2CForT1, D: DelayUs<u32>> MaybeSe for Se050<Twi, D> {}
+impl<Twi: I2CForT1, D: DelayUs<u32>> MaybeSe for Se05X<Twi, D> {}
 
 #[derive(PartialEq, Debug)]
 enum Command {
@@ -52,7 +52,7 @@ enum Command {
     Locked,
     Wink,
     Status,
-    TestSe050,
+    TestSe05X,
 }
 
 impl TryFrom<u8> for Command {
@@ -69,7 +69,7 @@ impl TryFrom<u8> for Command {
         // Now check the new commands.
         match command {
             STATUS => Ok(Command::Status),
-            TEST_SE050 => Ok(Command::TestSe050),
+            TEST_SE050 => Ok(Command::TestSe05X),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -153,7 +153,7 @@ pub trait Reboot {
     fn locked() -> bool;
 }
 
-pub struct App<T, R, S, Se050 = ()>
+pub struct App<T, R, S, Se05X = ()>
 where
     T: TrussedClient,
     R: Reboot,
@@ -165,7 +165,7 @@ where
     full_version: &'static str,
     status: S,
     boot_interface: PhantomData<R>,
-    se050: Se050,
+    se050: Se05X,
 }
 
 impl<T, R, S> App<T, R, S>
@@ -194,7 +194,7 @@ where
 }
 
 #[cfg(feature = "se050")]
-impl<T, R, S, Twi, D> App<T, R, S, Se050<Twi, D>>
+impl<T, R, S, Twi, D> App<T, R, S, Se05X<Twi, D>>
 where
     T: TrussedClient,
     R: Reboot,
@@ -208,7 +208,7 @@ where
         version: u32,
         full_version: &'static str,
         status: S,
-        se050: Se050<Twi, D>,
+        se050: Se05X<Twi, D>,
     ) -> Self {
         Self {
             trussed: client,
@@ -222,12 +222,12 @@ where
     }
 }
 
-impl<T, R, S, Se050> App<T, R, S, Se050>
+impl<T, R, S, Se05X> App<T, R, S, Se05X>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
-    Se050: MaybeSe,
+    Se05X: MaybeSe,
 {
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
@@ -287,7 +287,7 @@ where
             Command::Status => {
                 response.extend_from_slice(self.status.as_ref()).ok();
             }
-            Command::TestSe050 => {
+            Command::TestSe05X => {
                 debug_now!("Running se050 tests");
                 if let Err(_err) = self.se050.run_tests(response) {
                     debug_now!("se050 tests failed: {_err:?}");

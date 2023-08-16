@@ -4,21 +4,21 @@ use ctaphid_dispatch::types::Error;
 use embedded_hal::blocking::delay::DelayUs;
 use iso7816::Status;
 #[cfg(feature = "se050")]
-use se050::{
-    se050::{
+use se05x::{
+    se05x::{
         commands::{
             CreateSession, DeleteAll, DeleteSecureObject, EcdsaSign, EcdsaVerify, GetRandom,
             ReadIdList, ReadObject, VerifySessionUserId, WriteBinary, WriteEcKey, WriteUserId,
         },
         policies::{ObjectAccessRule, ObjectPolicyFlags, Policy, PolicySet},
-        EcCurve, EcDsaSignatureAlgo, ObjectId, P1KeyType, ProcessSessionCmd, Se050Result,
+        EcCurve, EcDsaSignatureAlgo, ObjectId, P1KeyType, ProcessSessionCmd, Se05XResult,
     },
     t1::I2CForT1,
 };
 use trussed::types::Vec;
 
 #[cfg(feature = "se050")]
-use se050::se050::Se050;
+use se05x::se05x::Se05X;
 
 #[cfg(feature = "se050")]
 use hex_literal::hex;
@@ -161,9 +161,9 @@ enum Advance {
 impl RunTests for () {}
 
 #[cfg(feature = "se050")]
-impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
+impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se05X<Twi, D> {
     fn run_tests<const N: usize>(&mut self, response: &mut Vec<u8, N>) -> Result<(), Error> {
-        debug_now!("Se050 run tests");
+        debug_now!("Se05X run tests");
         match self.run_tests_internal(response) {
             Ok(()) => Ok(()),
             Err(err) => {
@@ -209,10 +209,10 @@ impl<Twi: I2CForT1, D: DelayUs<u32>> RunTests for Se050<Twi, D> {
 }
 #[cfg(feature = "se050")]
 fn run_free_mem<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{commands::GetFreeMemory, Memory};
+    use se05x::se05x::{commands::GetFreeMemory, Memory};
 
     let mut buf = [b'a'; BUFFER_LEN];
     let mem = se050.run_command(
@@ -247,7 +247,7 @@ fn run_free_mem<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_get_random<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     let mut buf = [b'a'; BUFFER_LEN];
@@ -272,7 +272,7 @@ fn run_get_random<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_factory_reset<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     let mut buf = [b'a'; BUFFER_LEN];
@@ -318,14 +318,14 @@ fn run_factory_reset<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_list<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     let mut buf = [0; 200];
     se050.run_command(
         &ReadIdList {
             offset: 0.into(),
-            filter: se050::se050::SecureObjectFilter::All,
+            filter: se05x::se05x::SecureObjectFilter::All,
         },
         &mut buf,
     )?;
@@ -335,7 +335,7 @@ fn run_list<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_binary<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     let mut buf = [b'a'; 400];
@@ -399,10 +399,10 @@ fn run_binary<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_ecc<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::commands::ReadEcCurveList;
+    use se05x::se05x::commands::ReadEcCurveList;
 
     let mut buf = [0; 200];
     let mut buf2 = [0; 200];
@@ -448,7 +448,7 @@ fn run_ecc<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
-    if res.result != Se050Result::Success {
+    if res.result != Se05XResult::Success {
         return Err(0x3002.into());
     }
     response.push(Advance::VerifyP256 as u8).ok();
@@ -492,7 +492,7 @@ fn run_ecc<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
-    if res.result != Se050Result::Success {
+    if res.result != Se05XResult::Success {
         return Err(0x3003.into());
     }
     response.push(Advance::VerifyP521 as u8).ok();
@@ -503,7 +503,7 @@ fn run_ecc<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     let mut buf = [0; BUFFER_LEN];
@@ -553,7 +553,7 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         &mut buf,
     ) {
         Ok(_) => return Err(0x3004.into()),
-        Err(se050::se050::Error::Status(Status::CommandNotAllowedNoEf)) => {}
+        Err(se05x::se05x::Error::Status(Status::CommandNotAllowedNoEf)) => {}
         Err(_err) => {
             debug_now!("Got unexpected error: {_err:?}");
             return Err(0x3007.into());
@@ -602,7 +602,7 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
     match attack {
         Ok(_) => {}
-        Err(se050::se050::Error::Status(Status::CommandNotAllowedNoEf)) => {}
+        Err(se05x::se05x::Error::Status(Status::CommandNotAllowedNoEf)) => {}
         Err(_err) => {
             debug_now!("Got unexpected error: {_err:?}");
             return Err(0x3006.into());
@@ -614,10 +614,10 @@ fn run_userid_recreation<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_rsa2048<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{GenRsaKey, RsaDecrypt, RsaEncrypt, RsaSign, RsaVerify},
         RsaEncryptionAlgo, RsaSignatureAlgo,
     };
@@ -655,6 +655,9 @@ fn run_rsa2048<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if res.result != Se05XResult::Success {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::Rsa2048Verify as u8).ok();
     let res = se050.run_command(
         &RsaEncrypt {
@@ -673,7 +676,7 @@ fn run_rsa2048<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf,
     )?;
-    if res.plaintext != &[52; 32] {
+    if res.plaintext != [52; 32] {
         return Err(0x3008.into());
     }
     response.push(Advance::Rsa2048Decrypt as u8).ok();
@@ -686,10 +689,10 @@ fn run_rsa2048<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_rsa3072<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{GenRsaKey, RsaDecrypt, RsaEncrypt, RsaSign, RsaVerify},
         RsaEncryptionAlgo, RsaSignatureAlgo,
     };
@@ -727,6 +730,9 @@ fn run_rsa3072<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if res.result != Se05XResult::Success {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::Rsa3072Verify as u8).ok();
     let res = se050.run_command(
         &RsaEncrypt {
@@ -745,7 +751,7 @@ fn run_rsa3072<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf,
     )?;
-    if res.plaintext != &[52; 32] {
+    if res.plaintext != [52; 32] {
         return Err(0x3008.into());
     }
     response.push(Advance::Rsa3072Decrypt as u8).ok();
@@ -758,10 +764,10 @@ fn run_rsa3072<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_rsa4096<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{GenRsaKey, RsaDecrypt, RsaEncrypt, RsaSign, RsaVerify},
         RsaEncryptionAlgo, RsaSignatureAlgo,
     };
@@ -799,6 +805,9 @@ fn run_rsa4096<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if res.result != Se05XResult::Success {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::Rsa4096Verify as u8).ok();
     let res = se050.run_command(
         &RsaEncrypt {
@@ -817,7 +826,7 @@ fn run_rsa4096<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf,
     )?;
-    if res.plaintext != &[52; 32] {
+    if res.plaintext != [52; 32] {
         return Err(0x3008.into());
     }
     response.push(Advance::Rsa4096Decrypt as u8).ok();
@@ -830,10 +839,10 @@ fn run_rsa4096<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{
             CipherDecryptInit, CipherEncryptInit, CipherFinal, CipherOneShotDecrypt,
             CipherOneShotEncrypt, CipherUpdate, CreateCipherObject, DeleteCryptoObj, WriteSymmKey,
@@ -876,7 +885,7 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         &CipherOneShotDecrypt {
             key_id,
             mode: CipherMode::AesCtr,
-            ciphertext: &ciphertext1.ciphertext,
+            ciphertext: ciphertext1.ciphertext,
             initialization_vector: Some(&iv),
         },
         &mut buf2,
@@ -907,6 +916,9 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if ciphertext2.data != &ciphertext1.ciphertext[0..32 * 10] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmEncryptUpdate1 as u8).ok();
     let ciphertext3 = se050.run_command(
         &CipherUpdate {
@@ -915,6 +927,9 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if ciphertext3.data != &ciphertext1.ciphertext[32 * 10..][..32 * 5] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmEncryptUpdate2 as u8).ok();
     let ciphertext4 = se050.run_command(
         &CipherFinal {
@@ -923,6 +938,9 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf2,
     )?;
+    if ciphertext4.data != &ciphertext1.ciphertext[32 * 15..] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmEncryptFinal as u8).ok();
     se050.run_command(&DeleteCryptoObj { id: cipher_id }, &mut buf2)?;
     response.push(Advance::SymmEncryptDelete as u8).ok();
@@ -943,29 +961,38 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         &mut buf2,
     )?;
     response.push(Advance::SymmDecryptInit as u8).ok();
-    let ciphertext2 = se050.run_command(
+    let plaintext1 = se050.run_command(
         &CipherUpdate {
             cipher_id,
             data: &ciphertext1.ciphertext[0..32 * 10],
         },
         &mut buf2,
     )?;
+    if plaintext1.data != &plaintext_data[..32 * 10] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmDecryptUpdate1 as u8).ok();
-    let ciphertext3 = se050.run_command(
+    let plaintext2 = se050.run_command(
         &CipherUpdate {
             cipher_id,
             data: &ciphertext1.ciphertext[32 * 10..][..32 * 5],
         },
         &mut buf2,
     )?;
+    if plaintext2.data != &plaintext_data[32 * 10..][..32 * 5] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmDecryptUpdate2 as u8).ok();
-    let ciphertext4 = se050.run_command(
+    let plaintext3 = se050.run_command(
         &CipherFinal {
             cipher_id,
             data: &ciphertext1.ciphertext[32 * 15..],
         },
         &mut buf2,
     )?;
+    if plaintext3.data != &plaintext_data[32 * 15..] {
+        return Err((0x3000 + line!() as u16).into());
+    }
     response.push(Advance::SymmDecryptFinal as u8).ok();
     se050.run_command(&DeleteCryptoObj { id: cipher_id }, &mut buf2)?;
     response.push(Advance::SymmDecryptDelete as u8).ok();
@@ -976,10 +1003,10 @@ fn run_symm<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_mac<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{
             CreateSignatureObject, DeleteCryptoObj, MacGenerateFinal, MacGenerateInit,
             MacOneShotGenerate, MacOneShotValidate, MacUpdate, MacValidateFinal, MacValidateInit,
@@ -1027,8 +1054,8 @@ fn run_mac<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         &mut buf2,
     )?;
     response.push(Advance::MacVerifyOneShot as u8).ok();
-    if res.result != Se050Result::Success {
-        return Err(0x6008.into());
+    if res.result != Se05XResult::Success {
+        return Err((0x3000 + line!() as u16).into());
     }
     se050.run_command(
         &CreateSignatureObject {
@@ -1102,8 +1129,8 @@ fn run_mac<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
         },
         &mut buf,
     )?;
-    if res2.result != Se050Result::Success {
-        return Err(0x6009.into());
+    if res2.result != Se05XResult::Success {
+        return Err((0x3000 + line!() as u16).into());
     }
     response.push(Advance::MacVerifyFinal as u8).ok();
 
@@ -1117,11 +1144,11 @@ fn run_mac<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_aes_session<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
     use rand_chacha::rand_core::SeedableRng;
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{CloseSession, WriteSymmKey},
         SymmKeyType,
     };
@@ -1264,10 +1291,10 @@ fn run_aes_session<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_pbkdf<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{Pbkdf2, WriteSymmKey},
         SymmKeyType,
     };
@@ -1318,10 +1345,10 @@ fn run_pbkdf<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
 
 #[cfg(feature = "se050")]
 fn run_export_import<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
-    se050: &mut Se050<Twi, D>,
+    se050: &mut Se05X<Twi, D>,
     response: &mut Vec<u8, N>,
 ) -> Result<(), Status> {
-    use se050::se050::{
+    use se05x::se05x::{
         commands::{CipherOneShotEncrypt, ExportObject, ImportObject, WriteSymmKey},
         CipherMode, RsaKeyComponent, SymmKeyType,
     };
@@ -1402,7 +1429,7 @@ fn run_export_import<Twi: I2CForT1, D: DelayUs<u32>, const N: usize>(
     );
     if !matches!(
         res,
-        Err(se050::se050::Error::Status(
+        Err(se05x::se05x::Error::Status(
             Status::ConditionsOfUseNotSatisfied,
         ))
     ) {

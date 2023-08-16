@@ -16,14 +16,14 @@ delog = "0.1"
 iso7816 = "0.1"
 trussed = "0.1"
 
-se050 = { version = "0.0.1", optional = true }
+se05x = { version = "0.0.1", optional = true }
 embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
 rand_chacha = { version = "0.3.1", optional = true, default-features = false }
 
 [features]
 default = ["se050"]
-se050 = ["dep:se050", "embedded-hal", "rand_chacha"]
+se050 = ["dep:se05x", "embedded-hal", "rand_chacha"]
 
 log-all = []
 log-none = []
@@ -36,4 +36,4 @@ log-error = []
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
 trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "51e68500d7601d04f884f5e95567d14b9018a6cb" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
-se050 = { git = "https://github.com/sosthene-nitrokey/se050-generation.git", rev = "b1c9479698ae8afe36d6158a91f988d212d8aaa0"} 
+se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "db1ddea25cc382355b4292352652da656abc3005"} 
