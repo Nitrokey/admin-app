@@ -35,7 +35,7 @@ use run_tests::*;
 
 /// Trait representing the possible ownership of the SE050 by the admin app.
 ///
-/// Implemented by `()` and the `Se05X` stract
+/// Implemented by `()` and the `Se05X` struct
 pub trait MaybeSe: RunTests {}
 
 impl MaybeSe for () {}
