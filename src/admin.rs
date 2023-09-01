@@ -9,7 +9,6 @@ use serde::Deserialize;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
 use crate::config::{self, Config, ConfigError};
-
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
 // New commands are only available over this vendor command (acting as a namespace for this
@@ -19,6 +18,7 @@ const STATUS: u8 = 0x80;
 const TEST_SE050: u8 = 0x81;
 const GET_CONFIG: u8 = 0x82;
 const SET_CONFIG: u8 = 0x83;
+const FACTORY_RESET: u8 = 0x84;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -48,6 +48,7 @@ enum Command {
     TestSe05X,
     GetConfig,
     SetConfig,
+    FactoryReset,
 }
 
 impl TryFrom<u8> for Command {
@@ -67,6 +68,7 @@ impl TryFrom<u8> for Command {
             TEST_SE050 => Ok(Command::TestSe05X),
             GET_CONFIG => Ok(Command::GetConfig),
             SET_CONFIG => Ok(Command::SetConfig),
+            FACTORY_RESET => Ok(Command::FactoryReset),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -268,16 +270,7 @@ where
                 response.extend_from_slice(self.status.as_ref()).ok();
             }
             Command::TestSe05X => {
-                #[cfg(feature = "se050")]
-                {
-                    let rep = syscall!(self.trussed.test_se050());
-                    response.extend_from_slice(&rep.reply).ok();
-                    return Ok(());
-                }
-                #[cfg(not(feature = "se050"))]
-                {
-                    return Err(Error::NotAvailable);
-                }
+                return Err(Error::NotAvailable);
             }
             Command::GetConfig => {
                 // Response: 1 status byte, then data if status == 0
@@ -294,6 +287,10 @@ where
                     Err(error) => error.into(),
                 };
                 response.push(status).ok();
+            }
+            Command::FactoryReset => {
+                #[cfg(feature = "se050")]
+                syscall!(self.trussed.factory_reset());
             }
         }
         Ok(())

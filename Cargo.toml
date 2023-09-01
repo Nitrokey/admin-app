@@ -39,7 +39,9 @@ log-error = []
 
 [patch.crates-io]
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
-trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "51e68500d7601d04f884f5e95567d14b9018a6cb" }
-trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "3395a5b73241a0a9f14a0715952be6fe7f1e56b0" }
+trussed-auth = { git = "https://github.com/Nitrokey/trussed-auth", rev = "49c13eae6d9a225676191d4776d514848e4eab5b" }
+trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "83e33925f1edcc1f20ae9cc4a44fffe487c9fa69" }
+trussed = { git = "https://github.com/Nitrokey/trussed", rev = "6b9a43fbaaf34fe8d69fac0021f8130dd9a436c9" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
-se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "0b77eb6b152d214897696aadf87767fd84ffcb0e"} 
+se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "bf696ee99bc893dda385dbbf47e0cdab9c58aba6"} 
+trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "9c5c9d0f2c7dcfddeff99cb9090d6290d468f222"} 
