@@ -18,7 +18,7 @@ pub trait RunTests {
 
 impl RunTests for () {}
 
-#[cfg(feature = "se050")]
+#[cfg(feature = "se050-test")]
 mod se050_tests {
     use super::*;
 

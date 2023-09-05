@@ -32,7 +32,6 @@ const LOCKED: VendorCommand = VendorCommand::H63;
 const WINK: HidCommand = HidCommand::Wink; // 0x08
 
 const RNG_DATA_LEN: usize = 57;
-
 const CONFIG_OK: u8 = 0x00;
 
 #[derive(PartialEq, Debug)]

@@ -43,5 +43,5 @@ trussed-auth = { git = "https://github.com/Nitrokey/trussed-auth", rev = "49c13e
 trussed-staging = { git = "https://github.com/Nitrokey/trussed-staging.git", rev = "83e33925f1edcc1f20ae9cc4a44fffe487c9fa69" }
 trussed = { git = "https://github.com/Nitrokey/trussed", rev = "6b9a43fbaaf34fe8d69fac0021f8130dd9a436c9" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
-se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "bf696ee99bc893dda385dbbf47e0cdab9c58aba6"} 
-trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "9c5c9d0f2c7dcfddeff99cb9090d6290d468f222"} 
+se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "25f415fe49b8595b1321414f61da20e4f4f11510"} 
+trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "2d34376a8451653cee9cd843ba9f09746e6d084b"} 
