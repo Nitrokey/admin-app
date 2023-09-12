@@ -1,10 +1,14 @@
 use super::Client as TrussedClient;
 use apdu_dispatch::iso7816::Status;
 use apdu_dispatch::{app as apdu, command, response, Command as ApduCommand};
+use cbor_smol::cbor_deserialize;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
-use trussed::{interrupt::InterruptFlag, syscall, types::Vec};
+use serde::Deserialize;
+use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
+
+use crate::config::{self, Config, ConfigError};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -13,6 +17,8 @@ pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 const ADMIN: VendorCommand = VendorCommand::H72;
 const STATUS: u8 = 0x80;
 const TEST_SE050: u8 = 0x81;
+const GET_CONFIG: u8 = 0x82;
+const SET_CONFIG: u8 = 0x83;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -27,6 +33,8 @@ const WINK: HidCommand = HidCommand::Wink; // 0x08
 
 const RNG_DATA_LEN: usize = 57;
 
+const CONFIG_OK: u8 = 0x00;
+
 #[derive(PartialEq, Debug)]
 enum Command {
     Update,
@@ -38,6 +46,8 @@ enum Command {
     Wink,
     Status,
     TestSe05X,
+    GetConfig,
+    SetConfig,
 }
 
 impl TryFrom<u8> for Command {
@@ -55,6 +65,8 @@ impl TryFrom<u8> for Command {
         match command {
             STATUS => Ok(Command::Status),
             TEST_SE050 => Ok(Command::TestSe05X),
+            GET_CONFIG => Ok(Command::GetConfig),
+            SET_CONFIG => Ok(Command::SetConfig),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -115,6 +127,12 @@ impl From<Error> for Status {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct SetConfigRequest<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
 pub trait Reboot {
     /// Reboots the device.
     fn reboot() -> !;
@@ -138,32 +156,43 @@ pub trait Reboot {
     fn locked() -> bool;
 }
 
-pub struct App<T, R, S>
-where
-    T: TrussedClient,
-    R: Reboot,
-    S: AsRef<[u8]>,
-{
+pub struct App<T, R, S, C> {
     trussed: T,
     uuid: [u8; 16],
     version: u32,
     full_version: &'static str,
     status: S,
     boot_interface: PhantomData<R>,
+    config: C,
 }
 
-impl<T, R, S> App<T, R, S>
+impl<T, R, S, C> App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    C: Config,
 {
-    pub fn new(
+    pub fn load<F: Filestore>(
+        client: T,
+        filestore: &mut F,
+        uuid: [u8; 16],
+        version: u32,
+        full_version: &'static str,
+        status: S,
+    ) -> Self {
+        config::load(filestore)
+            .map(|config| Self::new(client, uuid, version, full_version, status, config))
+            .unwrap()
+    }
+
+    fn new(
         client: T,
         uuid: [u8; 16],
         version: u32,
         full_version: &'static str,
         status: S,
+        config: C,
     ) -> Self {
         Self {
             trussed: client,
@@ -172,8 +201,14 @@ where
             full_version,
             status,
             boot_interface: PhantomData,
+            config,
         }
     }
+
+    pub fn config(&self) -> &C {
+        &self.config
+    }
+
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
@@ -185,7 +220,7 @@ where
     fn exec<const N: usize>(
         &mut self,
         command: Command,
-        flag: Option<u8>,
+        input: &[u8],
         response: &mut Vec<u8, N>,
     ) -> Result<(), Error> {
         debug_now!("Executing command: {command:?}");
@@ -202,7 +237,7 @@ where
             }
             Command::Update => {
                 if self.user_present() {
-                    if flag == Some(0x01) {
+                    if input.first().copied() == Some(0x01) {
                         R::reboot_to_firmware_update_destructive();
                     } else {
                         R::reboot_to_firmware_update();
@@ -217,7 +252,7 @@ where
             }
             Command::Version => {
                 // GET VERSION
-                if flag == Some(0x01) {
+                if input.first().copied() == Some(0x01) {
                     response
                         .extend_from_slice(self.full_version.as_bytes())
                         .ok();
@@ -244,16 +279,49 @@ where
                     return Err(Error::NotAvailable);
                 }
             }
+            Command::GetConfig => {
+                // Response: 1 status byte, then data if status == 0
+                response.push(CONFIG_OK).ok();
+                if let Err(error) = self.get_config(input, response) {
+                    response.clear();
+                    response.push(error.into()).ok();
+                }
+            }
+            Command::SetConfig => {
+                // Response: 1 status byte
+                let status = match self.set_config(input) {
+                    Ok(()) => CONFIG_OK,
+                    Err(error) => error.into(),
+                };
+                response.push(status).ok();
+            }
         }
         Ok(())
     }
+
+    fn get_config<const N: usize>(
+        &mut self,
+        input: &[u8],
+        response: &mut Vec<u8, N>,
+    ) -> Result<(), ConfigError> {
+        let key = core::str::from_utf8(input).map_err(|_| ConfigError::InvalidKey)?;
+        config::get(&mut self.config, key, response)
+    }
+
+    fn set_config(&mut self, input: &[u8]) -> Result<(), ConfigError> {
+        let request: SetConfigRequest<'_> =
+            cbor_deserialize(input).map_err(|_| ConfigError::DeserializationFailed)?;
+        config::set(&mut self.config, request.key, request.value)?;
+        config::save(&mut self.trussed, &self.config)
+    }
 }
 
-impl<T, R, S> hid::App<'static> for App<T, R, S>
+impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    C: Config,
 {
     fn commands(&self) -> &'static [HidCommand] {
         &[
@@ -274,17 +342,16 @@ where
         input_data: &Message,
         response: &mut Message,
     ) -> hid::AppResult {
-        let (command, flag) = if command == HidCommand::Vendor(ADMIN) {
+        let (command, input) = if command == HidCommand::Vendor(ADMIN) {
             // new mode: first input byte specifies the actual command
             let (command, input) = input_data.split_first().ok_or(Error::InvalidLength)?;
             let command = Command::try_from(*command)?;
-            (command, input.first())
+            (command, input)
         } else {
             // old mode: directly use vendor commands + wink
-            (Command::try_from(command)?, input_data.first())
+            (Command::try_from(command)?, input_data.as_slice())
         };
-        self.exec(command, flag.copied(), response)
-            .map_err(From::from)
+        self.exec(command, input, response).map_err(From::from)
     }
 
     fn interrupt(&self) -> Option<&'static InterruptFlag> {
@@ -292,7 +359,7 @@ where
     }
 }
 
-impl<T, R, S> iso7816::App for App<T, R, S>
+impl<T, R, S, C> iso7816::App for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
@@ -304,11 +371,12 @@ where
     }
 }
 
-impl<T, R, S> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S>
+impl<T, R, S, C> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
+    C: Config,
 {
     fn select(&mut self, _apdu: &ApduCommand, _reply: &mut response::Data) -> apdu::Result {
         Ok(())
@@ -330,6 +398,14 @@ where
             return Err(Status::ConditionsOfUseNotSatisfied);
         }
 
-        self.exec(command, Some(apdu.p1), reply).map_err(From::from)
+        // The Update and Version commands use the P1 value to select an operation mode. As we
+        // cannot model this in the CTAPHID application, we pretend that we received the flag as
+        // the command payload.
+        if command == Command::Update || command == Command::Version {
+            self.exec(command, &[apdu.p1], reply)
+        } else {
+            self.exec(command, apdu.data().as_slice(), reply)
+        }
+        .map_err(From::from)
     }
 }

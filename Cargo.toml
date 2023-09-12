@@ -11,9 +11,13 @@ description = "Administrative Trussed app for SoloKeys Solo 2 security keys"
 
 [dependencies]
 apdu-dispatch = "0.1"
+cbor-smol = "0.4.0"
 ctaphid-dispatch = "0.1"
 delog = "0.1"
 iso7816 = "0.1"
+littlefs2 = "0.4"
+serde = { version = "1.0.180", default-features = false }
+strum_macros = "0.25.2"
 trussed = "0.1"
 
 se05x = { version = "0.0.1", optional = true }

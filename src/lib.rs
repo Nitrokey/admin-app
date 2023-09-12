@@ -11,7 +11,10 @@ extern crate delog;
 generate_macros!();
 
 mod admin;
+mod config;
+
 pub use admin::{App, Reboot};
+pub use config::{Config, ConfigError, ConfigValueMut};
 
 #[cfg(not(feature = "se050"))]
 pub trait Client: trussed::Client {}
