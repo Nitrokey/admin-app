@@ -158,6 +158,22 @@ where
     R: Reboot,
     S: AsRef<[u8]>,
 {
+    pub fn new(
+        client: T,
+        uuid: [u8; 16],
+        version: u32,
+        full_version: &'static str,
+        status: S,
+    ) -> Self {
+        Self {
+            trussed: client,
+            uuid,
+            version,
+            full_version,
+            status,
+            boot_interface: PhantomData,
+        }
+    }
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
