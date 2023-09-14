@@ -20,10 +20,11 @@ se05x = { version = "0.0.1", optional = true }
 embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
 rand_chacha = { version = "0.3.1", optional = true, default-features = false }
+trussed-se050-backend = { version = "0.1.0", optional = true }
 
 [features]
 default = ["se050"]
-se050 = ["dep:se05x", "embedded-hal", "rand_chacha"]
+se050 = ["trussed-se050-backend"]
 
 log-all = []
 log-none = []
@@ -35,5 +36,6 @@ log-error = []
 [patch.crates-io]
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
 trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "51e68500d7601d04f884f5e95567d14b9018a6cb" }
+trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "3395a5b73241a0a9f14a0715952be6fe7f1e56b0" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
-se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "db1ddea25cc382355b4292352652da656abc3005"} 
+se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "0b77eb6b152d214897696aadf87767fd84ffcb0e"} 
