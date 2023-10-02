@@ -276,7 +276,7 @@ where
                 }
                 #[cfg(not(feature = "se050"))]
                 {
-                    return Err(Error::NotAvailable);
+                    return Err(Error::UnsupportedCommand);
                 }
             }
             Command::GetConfig => {
