@@ -268,12 +268,6 @@ where
                 response.extend_from_slice(self.status.as_ref()).ok();
             }
             Command::TestSe05X => {
-                #[cfg(feature = "se050")]
-                {
-                    let rep = syscall!(self.trussed.test_se050());
-                    response.extend_from_slice(&rep.reply).ok();
-                    return Ok(());
-                }
                 #[cfg(not(feature = "se050"))]
                 {
                     return Err(Error::UnsupportedCommand);
