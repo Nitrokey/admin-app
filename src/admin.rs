@@ -1,6 +1,6 @@
 use super::Client as TrussedClient;
 use apdu_dispatch::iso7816::Status;
-use apdu_dispatch::{app as apdu, command, response, Command as ApduCommand};
+use apdu_dispatch::{app as apdu, command, dispatch::Interface, response, Command as ApduCommand};
 use cbor_smol::cbor_deserialize;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
@@ -378,7 +378,12 @@ where
     S: AsRef<[u8]>,
     C: Config,
 {
-    fn select(&mut self, _apdu: &ApduCommand, _reply: &mut response::Data) -> apdu::Result {
+    fn select(
+        &mut self,
+        _interface: Interface,
+        _apdu: &ApduCommand,
+        _reply: &mut response::Data,
+    ) -> apdu::Result {
         Ok(())
     }
 
