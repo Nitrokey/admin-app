@@ -302,6 +302,7 @@ where
             Command::FactoryReset => {
                 debug_now!("Factory resetting the device");
                 syscall!(self.trussed.factory_reset_device());
+                R::reboot();
             }
         }
         Ok(())
