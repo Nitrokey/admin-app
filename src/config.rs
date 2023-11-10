@@ -1,6 +1,7 @@
 use core::{
     fmt::{self, Display, Formatter, Write as _},
     str::FromStr,
+    sync::atomic::AtomicBool,
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
@@ -14,15 +15,25 @@ use trussed::{
     Client,
 };
 
+#[must_use]
+/// Tell the admin APP whether a given configuration change requires factory-resetting another application
+#[derive(Default, Debug, Clone)]
+pub struct ResetClient {
+    /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
+    pub signal: Option<&'static AtomicBool>,
+    /// Client ID to factory-reset if the associated configuration option is changed
+    pub client_id: Option<&'static Path>,
+}
+
 const LOCATION: Location = Location::Internal;
 const FILENAME: &Path = path!("config");
 
 pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
-    fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>>;
+    fn field(&mut self, key: &str) -> Option<(ConfigValueMut<'_>, ResetClient)>;
 }
 
 impl Config for () {
-    fn field(&mut self, _key: &str) -> Option<ConfigValueMut<'_>> {
+    fn field(&mut self, _key: &str) -> Option<(ConfigValueMut<'_>, ResetClient)> {
         None
     }
 }
@@ -84,12 +95,14 @@ pub fn get<C: Config, const N: usize>(
     key: &str,
     response: &mut Vec<u8, N>,
 ) -> Result<(), ConfigError> {
-    let field = config.field(key).ok_or(ConfigError::InvalidKey)?;
+    let field = config.field(key).ok_or(ConfigError::InvalidKey)?.0;
     write!(response, "{}", field).map_err(|_| ConfigError::DataTooLong)
 }
 
-pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<(), ConfigError> {
-    config.field(key).ok_or(ConfigError::InvalidKey)?.set(value)
+pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<ResetClient, ConfigError> {
+    let (mut ref_mut, reset) = config.field(key).ok_or(ConfigError::InvalidKey)?;
+    ref_mut.set(value)?;
+    Ok(reset)
 }
 
 pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {

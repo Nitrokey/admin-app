@@ -2,6 +2,7 @@ use super::Client as TrussedClient;
 use apdu_dispatch::iso7816::Status;
 use apdu_dispatch::{app as apdu, command, dispatch::Interface, response, Command as ApduCommand};
 use cbor_smol::cbor_deserialize;
+use core::sync::atomic::Ordering;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
@@ -318,7 +319,13 @@ where
     fn set_config(&mut self, input: &[u8]) -> Result<(), ConfigError> {
         let request: SetConfigRequest<'_> =
             cbor_deserialize(input).map_err(|_| ConfigError::DeserializationFailed)?;
-        config::set(&mut self.config, request.key, request.value)?;
+        let reset = config::set(&mut self.config, request.key, request.value)?;
+        if let Some(flag) = reset.signal {
+            flag.store(true, Ordering::Relaxed)
+        }
+        if let Some(client) = reset.client_id {
+            syscall!(self.trussed.factory_reset_client(client));
+        }
         config::save(&mut self.trussed, &self.config)
     }
 }
