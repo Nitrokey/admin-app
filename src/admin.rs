@@ -19,6 +19,7 @@ const STATUS: u8 = 0x80;
 const TEST_SE050: u8 = 0x81;
 const GET_CONFIG: u8 = 0x82;
 const SET_CONFIG: u8 = 0x83;
+const FACTORY_RESET: u8 = 0x84;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -48,6 +49,7 @@ enum Command {
     TestSe05X,
     GetConfig,
     SetConfig,
+    FactoryReset,
 }
 
 impl TryFrom<u8> for Command {
@@ -67,6 +69,7 @@ impl TryFrom<u8> for Command {
             TEST_SE050 => Ok(Command::TestSe05X),
             GET_CONFIG => Ok(Command::GetConfig),
             SET_CONFIG => Ok(Command::SetConfig),
+            FACTORY_RESET => Ok(Command::FactoryReset),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -294,6 +297,10 @@ where
                     Err(error) => error.into(),
                 };
                 response.push(status).ok();
+            }
+            Command::FactoryReset => {
+                debug_now!("Factory resetting the device");
+                syscall!(self.trussed.factory_reset_device());
             }
         }
         Ok(())

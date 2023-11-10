@@ -25,6 +25,7 @@ embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
 rand_chacha = { version = "0.3.1", optional = true, default-features = false }
 trussed-se050-backend = { version = "0.1.0", optional = true }
+trussed-staging = { version = "0.1.0", features = ["manage"] }
 
 [features]
 default = []
@@ -44,3 +45,4 @@ apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev 
 trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "3395a5b73241a0a9f14a0715952be6fe7f1e56b0" }
 iso7816 = { git = "https://github.com/sosthene-nitrokey/iso7816.git", rev = "160ca3bbd8e21ec4e4ee1e0748e1eaa53a45c97f"}
 se05x = { git = "https://github.com/Nitrokey/se05x.git", rev = "0b77eb6b152d214897696aadf87767fd84ffcb0e"} 
+trussed-staging = { git = "https://github.com/trussed-dev/trussed-staging.git", rev = "10baac2608e98e25ea77ade974a4e26f778d6c8e" }
