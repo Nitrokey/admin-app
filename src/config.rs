@@ -1,7 +1,7 @@
 use core::{
     fmt::{self, Display, Formatter, Write as _},
     str::FromStr,
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicU8, Ordering},
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
@@ -15,12 +15,63 @@ use trussed::{
     Client,
 };
 
+#[derive(Debug)]
+/// Structure meant to be stored in  a `static` to signal applications that they have been factory-resetted by the admin app
+pub struct ResetSignalAllocation(AtomicU8);
+
+impl ResetSignalAllocation {
+    pub fn load(&self) -> ResetSignal {
+        let v = self.0.load(Ordering::Relaxed);
+        ResetSignal::from_repr(v).expect("A reset signal value")
+    }
+
+    pub fn set_factory_reset(&self) -> bool {
+        self.0
+            .compare_exchange(
+                ResetSignal::None as u8,
+                ResetSignal::FactoryReset as u8,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok()
+    }
+
+    pub fn set_config_changed(&self) {
+        self.0
+            .store(ResetSignal::ConfigChanged as u8, Ordering::Relaxed)
+    }
+
+    /// Factory reset can be acknowledged so that the application can restart working
+    ///
+    /// A configuration change cannot be acknowledged as it requires a power cycle to be taken into account.
+    pub fn ack_factory_reset(&self) {
+        self.0
+            .store(ResetSignal::ConfigChanged as u8, Ordering::Relaxed)
+    }
+}
+
+#[derive(Debug, FromRepr, Default)]
+#[repr(u8)]
+pub enum ResetSignal {
+    #[default]
+    /// The App can continue operating
+    None,
+    /// The app has had it state factory reseted by the admin app
+    ///
+    /// It should delete any runtime state it is currently holding, then [`acknowledge`](ResetSignalAllocation::ack_factory_reset) the reset and continue working.
+    FactoryReset,
+    /// A configuration relevant to the application has been changed.
+    ///
+    /// The application must reject all incoming request and store no persistent state until a power cycle.
+    ConfigChanged,
+}
+
 #[must_use]
 /// Tell the admin APP whether a given configuration change requires factory-resetting another application
 #[derive(Default, Debug, Clone)]
 pub struct ResetClient {
     /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
-    pub signal: Option<&'static AtomicBool>,
+    pub signal: Option<&'static ResetSignalAllocation>,
     /// Client ID to factory-reset if the associated configuration option is changed
     pub client_id: Option<&'static Path>,
 }
@@ -37,7 +88,12 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     }
 
     /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
-    fn reset_signal(&self, _key: &str) -> Option<&'static AtomicBool> {
+    fn reset_signal(&self, _key: &str) -> Option<&'static ResetSignalAllocation> {
+        None
+    }
+
+    /// Can the client be factory-reset by the admin app?
+    fn can_reset(&self, _client: &str) -> Option<&'static ResetSignalAllocation> {
         None
     }
 }

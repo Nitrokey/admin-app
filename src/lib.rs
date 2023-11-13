@@ -14,7 +14,7 @@ mod admin;
 mod config;
 
 pub use admin::{App, Reboot};
-pub use config::{Config, ConfigError, ConfigValueMut};
+pub use config::{Config, ConfigError, ConfigValueMut, ResetSignal, ResetSignalAllocation};
 use trussed_staging::manage::ManageClient;
 
 #[cfg(not(feature = "se050"))]
