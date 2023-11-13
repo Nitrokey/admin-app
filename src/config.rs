@@ -29,11 +29,21 @@ const LOCATION: Location = Location::Internal;
 const FILENAME: &Path = path!("config");
 
 pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
-    fn field(&mut self, key: &str) -> Option<(ConfigValueMut<'_>, ResetClient)>;
+    fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>>;
+
+    /// Client ID to factory-reset if the associated configuration option is changed
+    fn reset_client_id(&self, _key: &str) -> Option<&'static Path> {
+        None
+    }
+
+    /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
+    fn reset_signal(&self, _key: &str) -> Option<&'static AtomicBool> {
+        None
+    }
 }
 
 impl Config for () {
-    fn field(&mut self, _key: &str) -> Option<(ConfigValueMut<'_>, ResetClient)> {
+    fn field(&mut self, _key: &str) -> Option<ConfigValueMut<'_>> {
         None
     }
 }
@@ -95,14 +105,19 @@ pub fn get<C: Config, const N: usize>(
     key: &str,
     response: &mut Vec<u8, N>,
 ) -> Result<(), ConfigError> {
-    let field = config.field(key).ok_or(ConfigError::InvalidKey)?.0;
+    let field = config.field(key).ok_or(ConfigError::InvalidKey)?;
     write!(response, "{}", field).map_err(|_| ConfigError::DataTooLong)
 }
 
 pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<ResetClient, ConfigError> {
-    let (mut ref_mut, reset) = config.field(key).ok_or(ConfigError::InvalidKey)?;
-    ref_mut.set(value)?;
-    Ok(reset)
+    config
+        .field(key)
+        .ok_or(ConfigError::InvalidKey)?
+        .set(value)?;
+    Ok(ResetClient {
+        signal: config.reset_signal(key),
+        client_id: config.reset_client_id(key),
+    })
 }
 
 pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {
