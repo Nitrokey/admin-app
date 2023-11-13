@@ -87,6 +87,7 @@ pub enum ConfigError {
     InvalidKey = 5,
     InvalidValue = 6,
     DataTooLong = 7,
+    NotConfirmed = 8,
 }
 
 const _: () = assert!(

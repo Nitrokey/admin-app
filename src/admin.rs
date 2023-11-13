@@ -36,6 +36,7 @@ const WINK: HidCommand = HidCommand::Wink; // 0x08
 const RNG_DATA_LEN: usize = 57;
 
 const CONFIG_OK: u8 = 0x00;
+const FACTORY_RESET_ERROR: u8 = 0x00;
 
 #[derive(PartialEq, Debug)]
 enum Command {
@@ -301,6 +302,12 @@ where
             }
             Command::FactoryReset => {
                 debug_now!("Factory resetting the device");
+                let res = syscall!(self.trussed.confirm_user_present(15 * 1000)).result;
+                if let Err(_err) = res {
+                    debug_now!("Failed to verify user presence: {_err:?}");
+                    response.push(FACTORY_RESET_ERROR).ok();
+                    return Err(Error::InvalidLength);
+                }
                 syscall!(self.trussed.factory_reset_device());
                 R::reboot();
             }
@@ -325,6 +332,10 @@ where
             flag.store(true, Ordering::Relaxed)
         }
         if let Some(client) = reset.client_id {
+            if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
+                debug_now!("Failed to verify user presence: {_err:?}");
+                return Err(ConfigError::NotConfirmed);
+            }
             syscall!(self.trussed.factory_reset_client(client));
         }
         config::save(&mut self.trussed, &self.config)
