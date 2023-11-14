@@ -45,8 +45,7 @@ impl ResetSignalAllocation {
     ///
     /// A configuration change cannot be acknowledged as it requires a power cycle to be taken into account.
     pub fn ack_factory_reset(&self) {
-        self.0
-            .store(ResetSignal::ConfigChanged as u8, Ordering::Relaxed)
+        self.0.store(ResetSignal::None as u8, Ordering::Relaxed)
     }
 }
 
