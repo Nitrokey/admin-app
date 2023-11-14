@@ -23,6 +23,9 @@ pub trait Client: trussed::Client + ManageClient {}
 impl<C: trussed::Client + ManageClient> Client for C {}
 
 #[cfg(feature = "se050")]
-pub trait Client: trussed::Client + trussed_se050_backend::manage::ManageClient {}
+pub trait Client:
+    trussed::Client + trussed_se050_backend::manage::ManageClient + ManageClient
+{
+}
 #[cfg(feature = "se050")]
-impl<C: trussed::Client + trussed_se050_backend::manage::ManageClient> Client for C {}
+impl<C: trussed::Client + trussed_se050_backend::manage::ManageClient + ManageClient> Client for C {}
