@@ -20,6 +20,10 @@ use trussed::{
 pub struct ResetSignalAllocation(AtomicU8);
 
 impl ResetSignalAllocation {
+    pub const fn new() -> Self {
+        Self(AtomicU8::new(ResetSignal::None as u8))
+    }
+
     pub fn load(&self) -> ResetSignal {
         let v = self.0.load(Ordering::Relaxed);
         ResetSignal::from_repr(v).expect("A reset signal value")
