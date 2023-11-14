@@ -48,8 +48,15 @@ impl ResetSignalAllocation {
     /// Factory reset can be acknowledged so that the application can restart working
     ///
     /// A configuration change cannot be acknowledged as it requires a power cycle to be taken into account.
-    pub fn ack_factory_reset(&self) {
-        self.0.store(ResetSignal::None as u8, Ordering::Relaxed)
+    pub fn ack_factory_reset(&self) -> bool {
+        self.0
+            .compare_exchange(
+                ResetSignal::FactoryReset as u8,
+                ResetSignal::None as u8,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok()
     }
 }
 
