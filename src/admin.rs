@@ -334,7 +334,7 @@ where
                 }
                 let path = PathBuf::from(client);
 
-                // No need to factory reset is already factory reset
+                // No need to factory reset if already factory reset
                 if flag.set_factory_reset() {
                     syscall!(self.trussed.factory_reset_client(&path));
                 }
