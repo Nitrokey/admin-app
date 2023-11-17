@@ -322,7 +322,7 @@ where
                     return Ok(());
                 };
 
-                let Some(flag) = self.config().can_reset(client) else {
+                let Some((_, flag)) = self.config().reset_client_id(client) else {
                     response.push(FACTORY_RESET_APP_NOT_ALLOWED).ok();
                     return Ok(());
                 };
@@ -356,17 +356,21 @@ where
     fn set_config(&mut self, input: &[u8]) -> Result<(), ConfigError> {
         let request: SetConfigRequest<'_> =
             cbor_deserialize(input).map_err(|_| ConfigError::DeserializationFailed)?;
-        let reset = config::set(&mut self.config, request.key, request.value)?;
-        if let Some(flag) = reset.signal {
-            flag.set_config_changed();
-        }
-        if let Some(client) = reset.client_id {
+        let reset_client_id = self.config.reset_client_id(request.key);
+
+        if reset_client_id.is_some() {
             if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
                 debug_now!("Failed to verify user presence: {_err:?}");
                 return Err(ConfigError::NotConfirmed);
             }
+        }
+
+        config::set(&mut self.config, request.key, request.value)?;
+        if let Some((client, signal)) = reset_client_id {
+            signal.set_config_changed();
             syscall!(self.trussed.factory_reset_client(client));
         }
+
         config::save(&mut self.trussed, &self.config)
     }
 }

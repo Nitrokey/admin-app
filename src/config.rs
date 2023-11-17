@@ -17,6 +17,34 @@ use trussed::{
 
 #[derive(Debug)]
 /// Structure meant to be stored in  a `static` to signal applications that they have been factory-resetted by the admin app
+///
+/// It is expected to have one such structure for each application supporting factory-reset by the admin-app
+///
+/// ```rust
+///# use admin_app::{ResetSignalAllocation, ConfigValueMut};
+///# use littlefs2::{path::Path, path};
+/// #[derive(Default, PartialEq, serde::Deserialize, serde::Serialize)]
+/// struct Config {
+///    use_new_backend: bool,
+///};
+/// static OPCARD_RESET: ResetSignalAllocation = ResetSignalAllocation::new();
+/// impl admin_app::Config for Config {
+///     fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>> {
+///         match key {
+///             "opcard.use_new_backend" => Some(ConfigValueMut::Bool(&mut self.use_new_backend)),
+///             _ => None,
+///         }
+///     }
+///     /// Client ID to factory-reset if the associated configuration option is changed
+///     fn reset_client_id(&self, key: &str) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
+///         match key {
+///             "opcard" => Some((path!("opcard"), &OPCARD_RESET)),
+///             "opcard.use_new_backend" =>Some((path!("opcard"), &OPCARD_RESET)),
+///             _ => None,
+///         }
+///     }
+/// }
+/// ```
 pub struct ResetSignalAllocation(AtomicU8);
 
 impl ResetSignalAllocation {
@@ -76,16 +104,6 @@ pub enum ResetSignal {
     ConfigChanged,
 }
 
-#[must_use]
-/// Tell the admin APP whether a given configuration change requires factory-resetting another application
-#[derive(Default, Debug, Clone)]
-pub struct ResetClient {
-    /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
-    pub signal: Option<&'static ResetSignalAllocation>,
-    /// Client ID to factory-reset if the associated configuration option is changed
-    pub client_id: Option<&'static Path>,
-}
-
 const LOCATION: Location = Location::Internal;
 const FILENAME: &Path = path!("config");
 
@@ -93,17 +111,15 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>>;
 
     /// Client ID to factory-reset if the associated configuration option is changed
-    fn reset_client_id(&self, _key: &str) -> Option<&'static Path> {
-        None
-    }
-
-    /// Boolean that must be set to true by the admin app to signal that the associated config value has been changed
-    fn reset_signal(&self, _key: &str) -> Option<&'static ResetSignalAllocation> {
-        None
-    }
-
-    /// Can the client be factory-reset by the admin app?
-    fn can_reset(&self, _client: &str) -> Option<&'static ResetSignalAllocation> {
+    ///
+    /// # If the Request is for a `client_id`:
+    ///
+    /// - MUST return `Some` to indicate that the client can be factory reset by the admin app,
+    /// - MUST return None otherwise.
+    fn reset_client_id(
+        &self,
+        _key: &str,
+    ) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
         None
     }
 }
@@ -176,15 +192,12 @@ pub fn get<C: Config, const N: usize>(
     write!(response, "{}", field).map_err(|_| ConfigError::DataTooLong)
 }
 
-pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<ResetClient, ConfigError> {
+pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<(), ConfigError> {
     config
         .field(key)
         .ok_or(ConfigError::InvalidKey)?
         .set(value)?;
-    Ok(ResetClient {
-        signal: config.reset_signal(key),
-        client_id: config.reset_client_id(key),
-    })
+    Ok(())
 }
 
 pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {
