@@ -5,6 +5,7 @@ use cbor_smol::cbor_deserialize;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
+use littlefs2::path::PathBuf;
 use serde::Deserialize;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
@@ -19,6 +20,8 @@ const STATUS: u8 = 0x80;
 const TEST_SE050: u8 = 0x81;
 const GET_CONFIG: u8 = 0x82;
 const SET_CONFIG: u8 = 0x83;
+const FACTORY_RESET: u8 = 0x84;
+const FACTORY_RESET_APP: u8 = 0x85;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -34,6 +37,10 @@ const WINK: HidCommand = HidCommand::Wink; // 0x08
 const RNG_DATA_LEN: usize = 57;
 
 const CONFIG_OK: u8 = 0x00;
+const FACTORY_RESET_OK: u8 = 0x00;
+const FACTORY_RESET_NOT_CONFIRMED: u8 = 0x01;
+const FACTORY_RESET_APP_NOT_ALLOWED: u8 = 0x02;
+const FACTORY_RESET_APP_FAILED_PARSE: u8 = 0x03;
 
 #[derive(PartialEq, Debug)]
 enum Command {
@@ -48,6 +55,8 @@ enum Command {
     TestSe05X,
     GetConfig,
     SetConfig,
+    FactoryReset,
+    FactoryResetApp,
 }
 
 impl TryFrom<u8> for Command {
@@ -67,6 +76,8 @@ impl TryFrom<u8> for Command {
             TEST_SE050 => Ok(Command::TestSe05X),
             GET_CONFIG => Ok(Command::GetConfig),
             SET_CONFIG => Ok(Command::SetConfig),
+            FACTORY_RESET => Ok(Command::FactoryReset),
+            FACTORY_RESET_APP => Ok(Command::FactoryResetApp),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -295,6 +306,40 @@ where
                 };
                 response.push(status).ok();
             }
+            Command::FactoryReset => {
+                debug_now!("Factory resetting the device");
+                if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
+                    debug_now!("Failed to verify user presence: {_err:?}");
+                    response.push(FACTORY_RESET_NOT_CONFIRMED).ok();
+                    return Ok(());
+                }
+                syscall!(self.trussed.factory_reset_device());
+                R::reboot();
+            }
+            Command::FactoryResetApp => {
+                let Ok(client) = core::str::from_utf8(input) else {
+                    response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
+                    return Ok(());
+                };
+
+                let Some((_, flag)) = self.config().reset_client_id(client) else {
+                    response.push(FACTORY_RESET_APP_NOT_ALLOWED).ok();
+                    return Ok(());
+                };
+
+                if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
+                    debug_now!("Failed to verify user presence: {_err:?}");
+                    response.push(FACTORY_RESET_NOT_CONFIRMED).ok();
+                    return Ok(());
+                }
+                let path = PathBuf::from(client);
+
+                // No need to factory reset if already factory reset
+                if flag.set_factory_reset() {
+                    syscall!(self.trussed.factory_reset_client(&path));
+                }
+                response.push(FACTORY_RESET_OK).ok();
+            }
         }
         Ok(())
     }
@@ -311,7 +356,21 @@ where
     fn set_config(&mut self, input: &[u8]) -> Result<(), ConfigError> {
         let request: SetConfigRequest<'_> =
             cbor_deserialize(input).map_err(|_| ConfigError::DeserializationFailed)?;
+        let reset_client_id = self.config.reset_client_id(request.key);
+
+        if reset_client_id.is_some() {
+            if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
+                debug_now!("Failed to verify user presence: {_err:?}");
+                return Err(ConfigError::NotConfirmed);
+            }
+        }
+
         config::set(&mut self.config, request.key, request.value)?;
+        if let Some((client, signal)) = reset_client_id {
+            signal.set_config_changed();
+            syscall!(self.trussed.factory_reset_client(client));
+        }
+
         config::save(&mut self.trussed, &self.config)
     }
 }

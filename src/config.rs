@@ -1,6 +1,7 @@
 use core::{
     fmt::{self, Display, Formatter, Write as _},
     str::FromStr,
+    sync::atomic::{AtomicU8, Ordering},
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
@@ -14,11 +15,113 @@ use trussed::{
     Client,
 };
 
+#[derive(Debug)]
+/// Structure meant to be stored in  a `static` to signal applications that they have been factory-resetted by the admin app
+///
+/// It is expected to have one such structure for each application supporting factory-reset by the admin-app
+///
+/// ```rust
+///# use admin_app::{ResetSignalAllocation, ConfigValueMut};
+///# use littlefs2::{path::Path, path};
+/// #[derive(Default, PartialEq, serde::Deserialize, serde::Serialize)]
+/// struct Config {
+///    use_new_backend: bool,
+///};
+/// static OPCARD_RESET: ResetSignalAllocation = ResetSignalAllocation::new();
+/// impl admin_app::Config for Config {
+///     fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>> {
+///         match key {
+///             "opcard.use_new_backend" => Some(ConfigValueMut::Bool(&mut self.use_new_backend)),
+///             _ => None,
+///         }
+///     }
+///     /// Client ID to factory-reset if the associated configuration option is changed
+///     fn reset_client_id(&self, key: &str) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
+///         match key {
+///             "opcard" => Some((path!("opcard"), &OPCARD_RESET)),
+///             "opcard.use_new_backend" =>Some((path!("opcard"), &OPCARD_RESET)),
+///             _ => None,
+///         }
+///     }
+/// }
+/// ```
+pub struct ResetSignalAllocation(AtomicU8);
+
+impl ResetSignalAllocation {
+    pub const fn new() -> Self {
+        Self(AtomicU8::new(ResetSignal::None as u8))
+    }
+
+    pub fn load(&self) -> ResetSignal {
+        let v = self.0.load(Ordering::Relaxed);
+        ResetSignal::from_repr(v).expect("A reset signal value")
+    }
+
+    pub fn set_factory_reset(&self) -> bool {
+        self.0
+            .compare_exchange(
+                ResetSignal::None as u8,
+                ResetSignal::FactoryReset as u8,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok()
+    }
+
+    pub fn set_config_changed(&self) {
+        self.0
+            .store(ResetSignal::ConfigChanged as u8, Ordering::Relaxed)
+    }
+
+    /// Factory reset can be acknowledged so that the application can restart working
+    ///
+    /// A configuration change cannot be acknowledged as it requires a power cycle to be taken into account.
+    pub fn ack_factory_reset(&self) -> bool {
+        self.0
+            .compare_exchange(
+                ResetSignal::FactoryReset as u8,
+                ResetSignal::None as u8,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok()
+    }
+}
+
+#[derive(Debug, FromRepr, Default)]
+#[repr(u8)]
+pub enum ResetSignal {
+    #[default]
+    /// The App can continue operating
+    None,
+    /// The app has had it state factory reseted by the admin app
+    ///
+    /// It should delete any runtime state it is currently holding, then [`acknowledge`](ResetSignalAllocation::ack_factory_reset) the reset and continue working.
+    FactoryReset,
+    /// A configuration relevant to the application has been changed.
+    ///
+    /// The application must reject all incoming request and store no persistent state until a power cycle.
+    ConfigChanged,
+}
+
 const LOCATION: Location = Location::Internal;
 const FILENAME: &Path = path!("config");
 
 pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>>;
+
+    /// Client ID to factory-reset if the associated configuration option is changed
+    ///
+    /// # If the Request is for a `client_id`:
+    ///
+    /// - MUST return `Some` to indicate that the client can be factory reset by the admin app,
+    /// - MUST return None otherwise.
+    fn reset_client_id(
+        &self,
+        _key: &str,
+    ) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
+        None
+    }
 }
 
 impl Config for () {
@@ -66,6 +169,7 @@ pub enum ConfigError {
     InvalidKey = 5,
     InvalidValue = 6,
     DataTooLong = 7,
+    NotConfirmed = 8,
 }
 
 const _: () = assert!(
@@ -89,7 +193,11 @@ pub fn get<C: Config, const N: usize>(
 }
 
 pub fn set<C: Config>(config: &mut C, key: &str, value: &str) -> Result<(), ConfigError> {
-    config.field(key).ok_or(ConfigError::InvalidKey)?.set(value)
+    config
+        .field(key)
+        .ok_or(ConfigError::InvalidKey)?
+        .set(value)?;
+    Ok(())
 }
 
 pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {

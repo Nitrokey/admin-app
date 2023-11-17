@@ -14,14 +14,18 @@ mod admin;
 mod config;
 
 pub use admin::{App, Reboot};
-pub use config::{Config, ConfigError, ConfigValueMut};
+pub use config::{Config, ConfigError, ConfigValueMut, ResetSignal, ResetSignalAllocation};
+use trussed_staging::manage::ManageClient;
 
 #[cfg(not(feature = "se050"))]
-pub trait Client: trussed::Client {}
+pub trait Client: trussed::Client + ManageClient {}
 #[cfg(not(feature = "se050"))]
-impl<C: trussed::Client> Client for C {}
+impl<C: trussed::Client + ManageClient> Client for C {}
 
 #[cfg(feature = "se050")]
-pub trait Client: trussed::Client + trussed_se050_backend::manage::ManageClient {}
+pub trait Client:
+    trussed::Client + trussed_se050_backend::manage::ManageClient + ManageClient
+{
+}
 #[cfg(feature = "se050")]
-impl<C: trussed::Client + trussed_se050_backend::manage::ManageClient> Client for C {}
+impl<C: trussed::Client + trussed_se050_backend::manage::ManageClient + ManageClient> Client for C {}
