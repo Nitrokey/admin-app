@@ -5,6 +5,7 @@ use cbor_smol::cbor_deserialize;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
+#[cfg(feature = "factory-reset")]
 use littlefs2::path::PathBuf;
 use serde::Deserialize;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
@@ -20,7 +21,9 @@ const STATUS: u8 = 0x80;
 const TEST_SE050: u8 = 0x81;
 const GET_CONFIG: u8 = 0x82;
 const SET_CONFIG: u8 = 0x83;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET: u8 = 0x84;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET_APP: u8 = 0x85;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
@@ -37,9 +40,13 @@ const WINK: HidCommand = HidCommand::Wink; // 0x08
 const RNG_DATA_LEN: usize = 57;
 
 const CONFIG_OK: u8 = 0x00;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET_OK: u8 = 0x00;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET_NOT_CONFIRMED: u8 = 0x01;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET_APP_NOT_ALLOWED: u8 = 0x02;
+#[cfg(feature = "factory-reset")]
 const FACTORY_RESET_APP_FAILED_PARSE: u8 = 0x03;
 
 #[derive(PartialEq, Debug)]
@@ -55,7 +62,9 @@ enum Command {
     TestSe05X,
     GetConfig,
     SetConfig,
+    #[cfg(feature = "factory-reset")]
     FactoryReset,
+    #[cfg(feature = "factory-reset")]
     FactoryResetApp,
 }
 
@@ -76,7 +85,9 @@ impl TryFrom<u8> for Command {
             TEST_SE050 => Ok(Command::TestSe05X),
             GET_CONFIG => Ok(Command::GetConfig),
             SET_CONFIG => Ok(Command::SetConfig),
+            #[cfg(feature = "factory-reset")]
             FACTORY_RESET => Ok(Command::FactoryReset),
+            #[cfg(feature = "factory-reset")]
             FACTORY_RESET_APP => Ok(Command::FactoryResetApp),
             _ => Err(Error::UnsupportedCommand),
         }
@@ -306,6 +317,7 @@ where
                 };
                 response.push(status).ok();
             }
+            #[cfg(feature = "factory-reset")]
             Command::FactoryReset => {
                 debug_now!("Factory resetting the device");
                 if let Err(_err) = syscall!(self.trussed.confirm_user_present(15 * 1000)).result {
@@ -316,6 +328,7 @@ where
                 syscall!(self.trussed.factory_reset_device());
                 R::reboot();
             }
+            #[cfg(feature = "factory-reset")]
             Command::FactoryResetApp => {
                 let Ok(client) = core::str::from_utf8(input) else {
                     response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
