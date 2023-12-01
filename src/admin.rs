@@ -203,13 +203,21 @@ where
         version: u32,
         full_version: &'static str,
         status: S,
-    ) -> Result<Self, ConfigError> {
-        config::load(filestore)
-            .map(|config| Self::new(client, uuid, version, full_version, status, config))
-            .map_err(|err| {
+    ) -> Result<Self, (T, ConfigError)> {
+        match config::load(filestore) {
+            Ok(config) => Ok(Self::new(
+                client,
+                uuid,
+                version,
+                full_version,
+                status,
+                config,
+            )),
+            Err(err) => {
                 error!("failed to load configuration: {:?}", err);
-                err
-            })
+                Err((client, err))
+            }
+        }
     }
 
     /// Create an admin app instance without the configuration mechanism, using the default config
