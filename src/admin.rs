@@ -224,10 +224,13 @@ where
         version: u32,
         full_version: &'static str,
         status: S,
-    ) -> Self {
+    ) -> Result<Self, ConfigError> {
         config::load(filestore)
             .map(|config| Self::new(client, uuid, version, full_version, status, config))
-            .unwrap()
+            .map_err(|err| {
+                error!("failed to load configuration: {:?}", err);
+                err
+            })
     }
 
     fn new(
