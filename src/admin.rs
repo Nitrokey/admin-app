@@ -188,27 +188,6 @@ pub struct App<T, R, S, C = ()> {
     config: C,
 }
 
-impl<T, R, S> App<T, R, S, ()>
-where
-    T: TrussedClient,
-    R: Reboot,
-    S: AsRef<[u8]>,
-{
-    /// Create an admin app instance without the configuration mechanism.
-    ///
-    /// This is only intended for testing and example code.  Firmware runners should use
-    /// [`App::load`][].
-    pub fn without_config(
-        client: T,
-        uuid: [u8; 16],
-        version: u32,
-        full_version: &'static str,
-        status: S,
-    ) -> Self {
-        Self::new(client, uuid, version, full_version, status, ())
-    }
-}
-
 impl<T, R, S, C> App<T, R, S, C>
 where
     T: TrussedClient,
@@ -217,17 +196,50 @@ where
     C: Config,
 {
     /// Create an admin app instance, loading the configuration from the filesystem.
-    pub fn load<F: Filestore>(
+    pub fn load_config<F: Filestore>(
         client: T,
         filestore: &mut F,
         uuid: [u8; 16],
         version: u32,
         full_version: &'static str,
         status: S,
+    ) -> Result<Self, (T, ConfigError)> {
+        match config::load(filestore) {
+            Ok(config) => Ok(Self::new(
+                client,
+                uuid,
+                version,
+                full_version,
+                status,
+                config,
+            )),
+            Err(err) => {
+                error!("failed to load configuration: {:?}", err);
+                Err((client, err))
+            }
+        }
+    }
+
+    /// Create an admin app instance without the configuration mechanism, using the default config
+    /// values.
+    ///
+    /// This is only intended for debugging, testing and example code.  In production,
+    /// [`App::load_config`][] should be used.
+    pub fn with_default_config(
+        client: T,
+        uuid: [u8; 16],
+        version: u32,
+        full_version: &'static str,
+        status: S,
     ) -> Self {
-        config::load(filestore)
-            .map(|config| Self::new(client, uuid, version, full_version, status, config))
-            .unwrap()
+        Self::new(
+            client,
+            uuid,
+            version,
+            full_version,
+            status,
+            Default::default(),
+        )
     }
 
     fn new(
