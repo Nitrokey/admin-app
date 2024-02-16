@@ -8,9 +8,10 @@ use ctaphid_dispatch::command::VendorCommand;
 #[cfg(feature = "factory-reset")]
 use littlefs2::path::PathBuf;
 use serde::Deserialize;
+use trussed::try_syscall;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
-use crate::config::{self, Config, ConfigError};
+use crate::config::{self, Config, ConfigError, MigrationConfig};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -186,6 +187,27 @@ pub struct App<T, R, S, C = ()> {
     status: S,
     boot_interface: PhantomData<R>,
     config: C,
+}
+
+impl<T, R, S, C> App<T, R, S, C>
+where
+    T: TrussedClient,
+    R: Reboot,
+    S: AsRef<[u8]>,
+    C: MigrationConfig,
+{
+    pub fn migrate(&mut self, to_version: u32) -> Result<(), ConfigError> {
+        if self.config.version() == to_version {
+            return Ok(());
+        }
+
+        assert!(to_version > self.config.version());
+        try_syscall!(self.trussed.migrate(self.config.version(), to_version)).map_err(|_err| {
+            error_now!("Migration failed {_err:?}");
+            ConfigError::WriteFailed
+        })?;
+        config::save(&mut self.trussed, &self.config)
+    }
 }
 
 impl<T, R, S, C> App<T, R, S, C>

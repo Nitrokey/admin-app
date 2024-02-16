@@ -130,6 +130,11 @@ impl Config for () {
     }
 }
 
+pub trait MigrationConfig: Config {
+    fn version(&self) -> u32;
+    fn set_version(&mut self, version: u32);
+}
+
 #[derive(Debug, Serialize)]
 pub enum ConfigValueMut<'a> {
     Bool(&'a mut bool),
