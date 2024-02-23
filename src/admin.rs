@@ -11,7 +11,7 @@ use serde::Deserialize;
 use trussed::try_syscall;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
-use crate::config::{self, Config, ConfigError, MigrationConfig};
+use crate::config::{self, Config, ConfigError};
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -194,27 +194,6 @@ where
     T: TrussedClient,
     R: Reboot,
     S: AsRef<[u8]>,
-    C: MigrationConfig,
-{
-    pub fn migrate(&mut self, to_version: u32) -> Result<(), ConfigError> {
-        if self.config.version() == to_version {
-            return Ok(());
-        }
-
-        assert!(to_version > self.config.version());
-        try_syscall!(self.trussed.migrate(self.config.version(), to_version)).map_err(|_err| {
-            error_now!("Migration failed {_err:?}");
-            ConfigError::WriteFailed
-        })?;
-        config::save(&mut self.trussed, &self.config)
-    }
-}
-
-impl<T, R, S, C> App<T, R, S, C>
-where
-    T: TrussedClient,
-    R: Reboot,
-    S: AsRef<[u8]>,
     C: Config,
 {
     /// Create an admin app instance, loading the configuration from the filesystem.
@@ -240,6 +219,31 @@ where
                 Err((client, err))
             }
         }
+    }
+
+    pub fn migrate(&mut self, to_version: u32) -> Result<(), ConfigError> {
+        let Some(current_version) = self.config.migration_version() else {
+            // Migrate cannot be done for configurations that don't provide storage of the filesystem version
+            return Err(ConfigError::InvalidValue);
+        };
+
+        if current_version == to_version {
+            return Ok(());
+        }
+
+        if to_version < current_version {
+            return Err(ConfigError::InvalidValue);
+        }
+
+        try_syscall!(self.trussed.migrate(current_version, to_version)).map_err(|_err| {
+            error_now!("Migration failed {_err:?}");
+            ConfigError::WriteFailed
+        })?;
+
+        if !self.config.set_migration_version(to_version) {
+            return Err(ConfigError::InvalidValue);
+        }
+        config::save(&mut self.trussed, &self.config)
     }
 
     /// Create an admin app instance without the configuration mechanism, using the default config
