@@ -23,12 +23,12 @@ trussed = "0.1"
 embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
 rand_chacha = { version = "0.3.1", optional = true, default-features = false }
-trussed-se050-backend = { version = "0.2.0", optional = true }
-trussed-staging = { version = "0.1.0", features = ["manage"] }
+trussed-manage = { version = "0.1.0" }
+trussed-se050-manage = { version = "0.1.0", optional = true }
 
 [features]
 default = []
-se050 = ["trussed-se050-backend"]
+se050 = ["trussed-se050-manage"]
 
 factory-reset = []
 log-all = []
@@ -43,7 +43,5 @@ apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev 
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
 littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
 trussed = { git = "https://github.com/Nitrokey/trussed.git", tag = "v0.1.0-nitrokey.18" }
-trussed-auth = { git = "https://github.com/trussed-dev/trussed-auth", rev = "4b8191f248c26cb074cdac887c7f3f48f9c449a4" }
-trussed-rsa-alloc = { git = "https://github.com/Nitrokey/trussed-rsa-backend.git", rev = "2088e2f8a8d706276c1559717b4c6b6d4f270253" }
-trussed-se050-backend = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", tag = "v0.2.0" }
-trussed-staging = { git = "https://github.com/nitrokey/trussed-staging.git", tag = "v0.1.0-nitrokey-hmac256p256.3" }
+trussed-manage = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "manage-v0.1.0" }
+trussed-se050-manage = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", tag = "se050-manage-v0.1.0" }
