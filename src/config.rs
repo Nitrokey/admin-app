@@ -122,11 +122,29 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     ) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
         None
     }
+
+    /// The migration version
+    ///
+    /// Return None if the configuration does not support storing the migration version
+    fn migration_version(&self) -> Option<u32>;
+
+    /// Set the migration version
+    ///
+    /// Return false if the configuration does not support storing the migration version
+    fn set_migration_version(&mut self, _version: u32) -> bool;
 }
 
 impl Config for () {
     fn field(&mut self, _key: &str) -> Option<ConfigValueMut<'_>> {
         None
+    }
+
+    fn migration_version(&self) -> Option<u32> {
+        None
+    }
+
+    fn set_migration_version(&mut self, _version: u32) -> bool {
+        false
     }
 }
 

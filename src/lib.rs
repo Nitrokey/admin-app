@@ -12,6 +12,7 @@ generate_macros!();
 
 mod admin;
 mod config;
+pub mod migrations;
 
 pub use admin::{App, Reboot};
 pub use config::{Config, ConfigError, ConfigValueMut, ResetSignal, ResetSignalAllocation};
@@ -25,9 +26,6 @@ pub trait Client: trussed::Client + ManageClient {}
 impl<C: trussed::Client + ManageClient> Client for C {}
 
 #[cfg(feature = "se050")]
-pub trait Client:
-    trussed::Client + Se050ManageClient + ManageClient
-{
-}
+pub trait Client: trussed::Client + Se050ManageClient + ManageClient {}
 #[cfg(feature = "se050")]
 impl<C: trussed::Client + Se050ManageClient + ManageClient> Client for C {}
