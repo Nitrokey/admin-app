@@ -38,6 +38,9 @@ log-debug = []
 log-warn = []
 log-error = []
 
+# Utils to test migration
+migration-tests = []
+
 [patch.crates-io]
 apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev = "915fc237103fcecc29d0f0b73391f19abf6576de" }
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
