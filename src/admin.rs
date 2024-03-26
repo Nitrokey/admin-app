@@ -225,7 +225,12 @@ where
         }
     }
 
-    pub fn migrate(&mut self, to_version: u32, store: impl Store) -> Result<(), ConfigError> {
+    pub fn migrate<F: Filestore>(
+        &mut self,
+        to_version: u32,
+        store: impl Store,
+        filestore: &mut F,
+    ) -> Result<(), ConfigError> {
         let Some(current_version) = self.config.migration_version() else {
             // Migrate cannot be done for configurations that don't provide storage of the filesystem version
             return Err(ConfigError::InvalidValue);
@@ -254,7 +259,7 @@ where
         if !self.config.set_migration_version(to_version) {
             return Err(ConfigError::InvalidValue);
         }
-        config::save(&mut self.trussed, &self.config)
+        config::save_filestore(filestore, &self.config)
     }
 
     /// Create an admin app instance without the configuration mechanism, using the default config

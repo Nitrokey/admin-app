@@ -225,6 +225,26 @@ pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {
     cbor_deserialize(&data).map_err(|_| ConfigError::DeserializationFailed)
 }
 
+pub fn save_filestore<F: Filestore, C: Config>(
+    store: &mut F,
+    config: &C,
+) -> Result<(), ConfigError> {
+    if config == &C::default() {
+        if store.exists(FILENAME, LOCATION) {
+            store
+                .remove_file(FILENAME, LOCATION)
+                .map_err(|_| ConfigError::WriteFailed)?;
+        }
+    } else {
+        let data: Message =
+            cbor_serialize_bytes(config).map_err(|_| ConfigError::SerializationFailed)?;
+        store
+            .write(FILENAME, LOCATION, &data)
+            .map_err(|_| ConfigError::SerializationFailed)?;
+    }
+    Ok(())
+}
+
 pub fn save<T: Client, C: Config>(client: &mut T, config: &C) -> Result<(), ConfigError> {
     if config == &Default::default() {
         if exists(client, LOCATION, FILENAME)? {
