@@ -461,6 +461,14 @@ where
 
         config::save(&mut self.trussed, &self.config)
     }
+
+    pub fn status(&self) -> &S {
+        &self.status
+    }
+
+    pub fn status_mut(&mut self) -> &mut S {
+        &mut self.status
+    }
 }
 
 impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
