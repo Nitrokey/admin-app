@@ -245,7 +245,7 @@ where
         for migration in self.migrations {
             if migration.version > current_version && migration.version <= to_version {
                 (migration.migrate)(&**internal, &**external).map_err(|_err| {
-                    error_now!("Migration failed: {_err}");
+                    error_now!("Migration failed: {_err:?}");
                     ConfigError::WriteFailed
                 })?;
             }
