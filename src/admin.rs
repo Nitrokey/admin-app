@@ -8,9 +8,11 @@ use ctaphid_dispatch::command::VendorCommand;
 #[cfg(feature = "factory-reset")]
 use littlefs2::path::PathBuf;
 use serde::Deserialize;
+use trussed::store::Store;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
 use crate::config::{self, Config, ConfigError};
+use crate::migrations::Migrator;
 
 pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
@@ -186,6 +188,7 @@ pub struct App<T, R, S, C = ()> {
     status: S,
     boot_interface: PhantomData<R>,
     config: C,
+    migrations: &'static [Migrator],
 }
 
 impl<T, R, S, C> App<T, R, S, C>
@@ -203,6 +206,7 @@ where
         version: u32,
         full_version: &'static str,
         status: S,
+        migrations: &'static [Migrator],
     ) -> Result<Self, (T, ConfigError)> {
         match config::load(filestore) {
             Ok(config) => Ok(Self::new(
@@ -212,12 +216,50 @@ where
                 full_version,
                 status,
                 config,
+                migrations,
             )),
             Err(err) => {
                 error!("failed to load configuration: {:?}", err);
                 Err((client, err))
             }
         }
+    }
+
+    pub fn migrate<F: Filestore>(
+        &mut self,
+        to_version: u32,
+        store: impl Store,
+        filestore: &mut F,
+    ) -> Result<(), ConfigError> {
+        let Some(current_version) = self.config.migration_version() else {
+            // Migrate cannot be done for configurations that don't provide storage of the filesystem version
+            return Err(ConfigError::InvalidValue);
+        };
+
+        if current_version == to_version {
+            return Ok(());
+        }
+
+        if to_version < current_version {
+            return Err(ConfigError::InvalidValue);
+        }
+
+        let internal = store.ifs();
+        let external = store.efs();
+
+        for migration in self.migrations {
+            if migration.version > current_version && migration.version <= to_version {
+                (migration.migrate)(&**internal, &**external).map_err(|_err| {
+                    error_now!("Migration failed: {_err:?}");
+                    ConfigError::WriteFailed
+                })?;
+            }
+        }
+
+        if !self.config.set_migration_version(to_version) {
+            return Err(ConfigError::InvalidValue);
+        }
+        config::save_filestore(filestore, &self.config)
     }
 
     /// Create an admin app instance without the configuration mechanism, using the default config
@@ -231,6 +273,7 @@ where
         version: u32,
         full_version: &'static str,
         status: S,
+        migrations: &'static [Migrator],
     ) -> Self {
         Self::new(
             client,
@@ -239,6 +282,7 @@ where
             full_version,
             status,
             Default::default(),
+            migrations,
         )
     }
 
@@ -249,6 +293,7 @@ where
         full_version: &'static str,
         status: S,
         config: C,
+        migrations: &'static [Migrator],
     ) -> Self {
         Self {
             trussed: client,
@@ -258,6 +303,7 @@ where
             status,
             boot_interface: PhantomData,
             config,
+            migrations,
         }
     }
 
@@ -419,6 +465,14 @@ where
         }
 
         config::save(&mut self.trussed, &self.config)
+    }
+
+    pub fn status(&self) -> &S {
+        &self.status
+    }
+
+    pub fn status_mut(&mut self) -> &mut S {
+        &mut self.status
     }
 }
 

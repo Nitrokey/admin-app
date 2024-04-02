@@ -122,11 +122,29 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     ) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
         None
     }
+
+    /// The migration version
+    ///
+    /// Return None if the configuration does not support storing the migration version
+    fn migration_version(&self) -> Option<u32>;
+
+    /// Set the migration version
+    ///
+    /// Return false if the configuration does not support storing the migration version
+    fn set_migration_version(&mut self, _version: u32) -> bool;
 }
 
 impl Config for () {
     fn field(&mut self, _key: &str) -> Option<ConfigValueMut<'_>> {
         None
+    }
+
+    fn migration_version(&self) -> Option<u32> {
+        None
+    }
+
+    fn set_migration_version(&mut self, _version: u32) -> bool {
+        false
     }
 }
 
@@ -205,6 +223,26 @@ pub fn load<F: Filestore, C: Config>(store: &mut F) -> Result<C, ConfigError> {
         return Ok(Default::default());
     };
     cbor_deserialize(&data).map_err(|_| ConfigError::DeserializationFailed)
+}
+
+pub fn save_filestore<F: Filestore, C: Config>(
+    store: &mut F,
+    config: &C,
+) -> Result<(), ConfigError> {
+    if config == &C::default() {
+        if store.exists(FILENAME, LOCATION) {
+            store
+                .remove_file(FILENAME, LOCATION)
+                .map_err(|_| ConfigError::WriteFailed)?;
+        }
+    } else {
+        let data: Message =
+            cbor_serialize_bytes(config).map_err(|_| ConfigError::SerializationFailed)?;
+        store
+            .write(FILENAME, LOCATION, &data)
+            .map_err(|_| ConfigError::SerializationFailed)?;
+    }
+    Ok(())
 }
 
 pub fn save<T: Client, C: Config>(client: &mut T, config: &C) -> Result<(), ConfigError> {
