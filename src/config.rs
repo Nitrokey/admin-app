@@ -5,14 +5,15 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
+use heapless::Vec;
 use littlefs2::{path, path::Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
 use trussed::{
+    client::Client,
     store::filestore::Filestore,
     try_syscall,
-    types::{Location, Message, Vec},
-    Client,
+    types::{Location, Message},
 };
 
 #[derive(Debug)]

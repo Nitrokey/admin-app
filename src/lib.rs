@@ -20,14 +20,14 @@ use trussed_manage::ManageClient;
 use trussed_se050_manage::Se050ManageClient;
 
 #[cfg(not(feature = "se050"))]
-pub trait Client: trussed::Client + ManageClient {}
+pub trait Client: trussed::client::Client + ManageClient {}
 #[cfg(not(feature = "se050"))]
-impl<C: trussed::Client + ManageClient> Client for C {}
+impl<C: trussed::client::Client + ManageClient> Client for C {}
 
 #[cfg(feature = "se050")]
 pub trait Client:
-    trussed::Client + Se050ManageClient + ManageClient
+    trussed::client::Client + Se050ManageClient + ManageClient
 {
 }
 #[cfg(feature = "se050")]
-impl<C: trussed::Client + Se050ManageClient + ManageClient> Client for C {}
+impl<C: trussed::client::Client + Se050ManageClient + ManageClient> Client for C {}
