@@ -311,6 +311,10 @@ where
         &self.config
     }
 
+    pub fn config_mut(&mut self) -> &mut C {
+        &mut self.config
+    }
+
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
