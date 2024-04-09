@@ -441,6 +441,10 @@ where
                 match self.config.reset_client_config(client) {
                     crate::config::ResetConfigResult::Changed => {
                         flag.set_config_changed();
+                        config::save(&mut self.trussed, &self.config).map_err(|_err| {
+                            error_now!("Failed to save config: {_err:?}");
+                            Error::InvalidLength
+                        })?;
                         syscall!(self.trussed.factory_reset_client(&path));
                     }
                     crate::config::ResetConfigResult::Unchanged => {
