@@ -315,6 +315,13 @@ where
         &mut self.config
     }
 
+    pub fn save_config_filestore<F: Filestore>(
+        &mut self,
+        filestore: &mut F,
+    ) -> Result<(), ConfigError> {
+        config::save_filestore(filestore, &self.config)
+    }
+
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
