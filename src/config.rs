@@ -107,6 +107,28 @@ pub enum ResetSignal {
 const LOCATION: Location = Location::Internal;
 const FILENAME: &Path = path!("config");
 
+#[derive(Debug, Clone, Copy)]
+pub enum ResetConfigResult {
+    /// The config was changed as a result of the reset to default
+    Changed,
+    /// The config was at the default value
+    Unchanged,
+    /// The key does not correspond to any application that can be reset
+    WrongKey,
+}
+
+impl ResetConfigResult {
+    pub fn is_changed(&self) -> bool {
+        matches!(self, Self::Changed)
+    }
+    pub fn is_unchanged(&self) -> bool {
+        matches!(self, Self::Unchanged)
+    }
+    pub fn is_error(&self) -> bool {
+        matches!(self, Self::WrongKey)
+    }
+}
+
 pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     fn field(&mut self, key: &str) -> Option<ConfigValueMut<'_>>;
 
@@ -115,12 +137,21 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     /// # If the Request is for a `client_id`:
     ///
     /// - MUST return `Some` to indicate that the client can be factory reset by the admin app,
+    ///   In that case, the path is the clientid that must be reset, and the allocation must point to a
+    ///   signal that id checked by the application.
     /// - MUST return None otherwise.
     fn reset_client_id(
         &self,
         _key: &str,
     ) -> Option<(&'static Path, &'static ResetSignalAllocation)> {
         None
+    }
+
+    /// Reset the config of a client to its default value
+    ///
+    /// Returns `true` if the config has been changed as a result
+    fn reset_client_config(&mut self, _key: &str) -> ResetConfigResult {
+        ResetConfigResult::WrongKey
     }
 
     /// The migration version
@@ -137,6 +168,10 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
 impl Config for () {
     fn field(&mut self, _key: &str) -> Option<ConfigValueMut<'_>> {
         None
+    }
+
+    fn reset_client_config(&mut self, _key: &str) -> ResetConfigResult {
+        ResetConfigResult::WrongKey
     }
 
     fn migration_version(&self) -> Option<u32> {

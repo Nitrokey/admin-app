@@ -311,6 +311,17 @@ where
         &self.config
     }
 
+    pub fn config_mut(&mut self) -> &mut C {
+        &mut self.config
+    }
+
+    pub fn save_config_filestore<F: Filestore>(
+        &mut self,
+        filestore: &mut F,
+    ) -> Result<(), ConfigError> {
+        config::save_filestore(filestore, &self.config)
+    }
+
     fn user_present(&mut self) -> bool {
         let user_present = syscall!(self
             .trussed
@@ -427,10 +438,27 @@ where
                 }
                 let path = PathBuf::from(client);
 
-                // No need to factory reset if already factory reset
-                if flag.set_factory_reset() {
-                    syscall!(self.trussed.factory_reset_client(&path));
+                match self.config.reset_client_config(client) {
+                    crate::config::ResetConfigResult::Changed => {
+                        flag.set_config_changed();
+                        config::save(&mut self.trussed, &self.config).map_err(|_err| {
+                            error_now!("Failed to save config: {_err:?}");
+                            Error::InvalidLength
+                        })?;
+                        syscall!(self.trussed.factory_reset_client(&path));
+                    }
+                    crate::config::ResetConfigResult::Unchanged => {
+                        // No need to factory reset if already factory reset
+                        if flag.set_factory_reset() {
+                            syscall!(self.trussed.factory_reset_client(&path));
+                        }
+                    }
+                    crate::config::ResetConfigResult::WrongKey => {
+                        response.push(FACTORY_RESET_APP_NOT_ALLOWED).ok();
+                        return Ok(());
+                    }
                 }
+
                 response.push(FACTORY_RESET_OK).ok();
             }
         }
