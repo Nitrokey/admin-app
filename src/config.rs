@@ -5,7 +5,7 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
-use littlefs2::{path, path::Path};
+use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
 use trussed::{
@@ -22,7 +22,7 @@ use trussed::{
 ///
 /// ```rust
 ///# use admin_app::{ResetSignalAllocation, ConfigValueMut};
-///# use littlefs2::{path::Path, path};
+///# use littlefs2_core::{Path, path};
 /// #[derive(Default, PartialEq, serde::Deserialize, serde::Serialize)]
 /// struct Config {
 ///    use_new_backend: bool,

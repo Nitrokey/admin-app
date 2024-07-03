@@ -5,11 +5,11 @@ use cbor_smol::cbor_deserialize;
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
-#[cfg(feature = "factory-reset")]
-use littlefs2::path::PathBuf;
 use serde::Deserialize;
 use trussed::store::Store;
 use trussed::try_syscall;
+#[cfg(feature = "factory-reset")]
+use trussed::types::PathBuf;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
 use crate::config::{self, Config, ConfigError};
@@ -443,6 +443,10 @@ where
                     response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
                     return Ok(());
                 };
+                let Ok(path) = PathBuf::try_from(client) else {
+                    response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
+                    return Ok(());
+                };
 
                 let Some((_, flag)) = self.config().reset_client_id(client) else {
                     response.push(FACTORY_RESET_APP_NOT_ALLOWED).ok();
@@ -454,7 +458,6 @@ where
                     response.push(FACTORY_RESET_NOT_CONFIRMED).ok();
                     return Ok(());
                 }
-                let path = PathBuf::from(client);
 
                 match self.config.reset_client_config(client) {
                     crate::config::ResetConfigResult::Changed => {
