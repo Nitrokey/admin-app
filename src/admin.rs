@@ -9,6 +9,7 @@ use ctaphid_dispatch::command::VendorCommand;
 use littlefs2::path::PathBuf;
 use serde::Deserialize;
 use trussed::store::Store;
+use trussed::try_syscall;
 use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
 
 use crate::config::{self, Config, ConfigError};
@@ -180,6 +181,17 @@ pub trait Reboot {
     fn locked() -> bool;
 }
 
+/// Trait indicating that a value can be used as a status
+pub trait StatusBytes {
+    type Serialized: AsRef<[u8]>;
+    /// Set the flag indicating that the random generator could properly be created (`false`) or not (`true`)
+    fn set_random_error(&mut self, value: bool);
+    /// Get the flag indicating that the random generator could properly be created (`false`) or not (`true`)
+    fn get_random_error(&self) -> bool;
+    /// Serialize the StatusBytes to raw bytes
+    fn serialize(&self) -> Self::Serialized;
+}
+
 pub struct App<T, R, S, C = ()> {
     trussed: T,
     uuid: [u8; 16],
@@ -195,7 +207,7 @@ impl<T, R, S, C> App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
-    S: AsRef<[u8]>,
+    S: StatusBytes,
     C: Config,
 {
     /// Create an admin app instance, loading the configuration from the filesystem.
@@ -378,7 +390,13 @@ where
                 syscall!(self.trussed.wink(Duration::from_secs(10)));
             }
             Command::Status => {
-                response.extend_from_slice(self.status.as_ref()).ok();
+                if !self.status.get_random_error() {
+                    let is_random_working = try_syscall!(self.trussed.random_bytes(1)).is_ok();
+                    self.status.set_random_error(!is_random_working);
+                }
+                response
+                    .extend_from_slice(self.status.serialize().as_ref())
+                    .ok();
             }
             Command::TestSe05X => {
                 #[cfg(feature = "se050")]
@@ -508,7 +526,7 @@ impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
-    S: AsRef<[u8]>,
+    S: StatusBytes,
     C: Config,
 {
     fn commands(&self) -> &'static [HidCommand] {
@@ -551,7 +569,7 @@ impl<T, R, S, C> iso7816::App for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
-    S: AsRef<[u8]>,
+    S: StatusBytes,
 {
     // Solo management app
     fn aid(&self) -> iso7816::Aid {
@@ -563,7 +581,7 @@ impl<T, R, S, C> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, 
 where
     T: TrussedClient,
     R: Reboot,
-    S: AsRef<[u8]>,
+    S: StatusBytes,
     C: Config,
 {
     fn select(

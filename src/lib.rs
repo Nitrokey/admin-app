@@ -14,7 +14,7 @@ mod admin;
 mod config;
 pub mod migrations;
 
-pub use admin::{App, Reboot};
+pub use admin::{App, Reboot, StatusBytes};
 pub use config::{
     Config, ConfigError, ConfigValueMut, ResetConfigResult, ResetSignal, ResetSignalAllocation,
 };
