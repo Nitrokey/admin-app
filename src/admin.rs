@@ -1,7 +1,7 @@
 use super::Client as TrussedClient;
 use apdu_dispatch::iso7816::Status;
 use apdu_dispatch::{app as apdu, command, dispatch::Interface, response, Command as ApduCommand};
-use cbor_smol::cbor_deserialize;
+use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
@@ -28,6 +28,7 @@ const SET_CONFIG: u8 = 0x83;
 const FACTORY_RESET: u8 = 0x84;
 #[cfg(feature = "factory-reset")]
 const FACTORY_RESET_APP: u8 = 0x85;
+const LIST_AVAILABLE_FIELDS: u8 = 0x86;
 
 // For compatibility, old commands are also available directly as separate vendor commands.
 const UPDATE: VendorCommand = VendorCommand::H51;
@@ -69,6 +70,7 @@ enum Command {
     FactoryReset,
     #[cfg(feature = "factory-reset")]
     FactoryResetApp,
+    ListAvailableFields,
 }
 
 impl TryFrom<u8> for Command {
@@ -92,6 +94,7 @@ impl TryFrom<u8> for Command {
             FACTORY_RESET => Ok(Command::FactoryReset),
             #[cfg(feature = "factory-reset")]
             FACTORY_RESET_APP => Ok(Command::FactoryResetApp),
+            LIST_AVAILABLE_FIELDS => Ok(Command::ListAvailableFields),
             _ => Err(Error::UnsupportedCommand),
         }
     }
@@ -425,6 +428,10 @@ where
                     Err(error) => error.into(),
                 };
                 response.push(status).ok();
+            }
+            Command::ListAvailableFields => {
+                cbor_serialize_to(&self.config.list_available_fields(), response).ok();
+                return Ok(());
             }
             #[cfg(feature = "factory-reset")]
             Command::FactoryReset => {

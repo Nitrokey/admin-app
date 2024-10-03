@@ -20,7 +20,7 @@ use trussed::{
 ///
 /// It is expected to have one such structure for each application supporting factory-reset by the admin-app
 ///
-/// ```rust
+/// ```rust,ignore
 ///# use admin_app::{ResetSignalAllocation, ConfigValueMut};
 ///# use littlefs2::{path::Path, path};
 /// #[derive(Default, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -163,6 +163,34 @@ pub trait Config: Default + PartialEq + DeserializeOwned + Serialize {
     ///
     /// Return false if the configuration does not support storing the migration version
     fn set_migration_version(&mut self, _version: u32) -> bool;
+
+    fn list_available_fields(&self) -> &'static [ConfigField];
+}
+
+// No need to rename, cbor-smol already packs enum using ids
+#[derive(Serialize)]
+#[non_exhaustive]
+pub enum FieldType {
+    Bool,
+    U8,
+}
+
+#[derive(Serialize)]
+pub struct ConfigField {
+    #[serde(rename = "n")]
+    pub name: &'static str,
+    /// Changing the config field requires a touch
+    #[serde(rename = "c")]
+    pub requires_touch_confirmation: bool,
+    /// Changing the config field requires a power cycle
+    #[serde(rename = "r")]
+    pub requires_reboot: bool,
+    /// Changing the config field deletes data
+    #[serde(rename = "d")]
+    pub destructive: bool,
+    /// The type of data stored in this field
+    #[serde(rename = "t")]
+    pub ty: FieldType,
 }
 
 impl Config for () {
@@ -180,6 +208,10 @@ impl Config for () {
 
     fn set_migration_version(&mut self, _version: u32) -> bool {
         false
+    }
+
+    fn list_available_fields(&self) -> &'static [ConfigField] {
+        &[]
     }
 }
 
@@ -312,4 +344,28 @@ fn load_if_exists<F: Filestore>(
             Ok(None)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use hex_literal::hex;
+
+    use super::*;
+
+    #[test]
+    fn config_field() {
+        let fields = &[ConfigField {
+            name: "test_name",
+            requires_touch_confirmation: true,
+            requires_reboot: false,
+            destructive: true,
+            ty: FieldType::Bool,
+        }];
+        let mut bytes: trussed::types::Vec<u8, 100> = Default::default();
+        cbor_smol::cbor_serialize_to(fields, &mut bytes).unwrap();
+        assert_eq!(
+            &bytes,
+            &hex!("81A5616E69746573745F6E616D656163F56172F46164F5617400")
+        );
+    }
 }
