@@ -15,7 +15,7 @@ use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, ty
 use crate::config::{self, Config, ConfigError};
 use crate::migrations::Migrator;
 
-pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 30;
+pub const USER_PRESENCE_TIMEOUT_SECS: u32 = 15;
 
 // New commands are only available over this vendor command (acting as a namespace for this
 // application).  The actual application command is stored in the first byte of the packet data.
