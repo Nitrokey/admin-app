@@ -5,7 +5,7 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
-use littlefs2::{path, path::Path};
+use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
 use trussed::{

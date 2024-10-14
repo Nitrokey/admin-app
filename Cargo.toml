@@ -15,7 +15,8 @@ cbor-smol = { version = "0.5.0", features = ["heapless-v0-7", "heapless-bytes-v0
 ctaphid-dispatch = "0.1"
 delog = "0.1"
 iso7816 = "0.1"
-littlefs2 = "0.4"
+littlefs2 = { version = "0.5", optional = true }
+littlefs2-core = { version = "0.1", features = ["heapless-bytes03"] }
 serde = { version = "1.0.180", default-features = false }
 strum_macros = "0.25.2"
 trussed = "0.1"
@@ -39,11 +40,10 @@ log-warn = []
 log-error = []
 
 # Utils to test migration
-migration-tests = []
+migration-tests = ["dep:littlefs2"]
 
 [patch.crates-io]
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
-littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
-trussed = { git = "https://github.com/Nitrokey/trussed.git", tag = "v0.1.0-nitrokey.18" }
+trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "046478b7a4f6e2315acf9112d98308379c2e3eee" }
 trussed-manage = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "manage-v0.1.0" }
 trussed-se050-manage = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", tag = "se050-manage-v0.1.0" }
