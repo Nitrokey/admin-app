@@ -10,7 +10,7 @@ description = "Administrative Trussed app for SoloKeys Solo 2 security keys"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-apdu-dispatch = "0.1"
+apdu-app = "0.1"
 cbor-smol = { version = "0.4.0", features = ["heapless-v0-7", "heapless-bytes-v0-3"] }
 ctaphid-dispatch = "0.1"
 delog = "0.1"
@@ -42,7 +42,6 @@ log-error = []
 migration-tests = []
 
 [patch.crates-io]
-apdu-dispatch = { git = "https://github.com/trussed-dev/apdu-dispatch.git", rev = "915fc237103fcecc29d0f0b73391f19abf6576de" }
 ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", rev = "57cb3317878a8593847595319aa03ef17c29ec5b" }
 littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27e49ca321089d01d8c9b169c4aeb58ceeeca" }
 trussed = { git = "https://github.com/Nitrokey/trussed.git", tag = "v0.1.0-nitrokey.18" }

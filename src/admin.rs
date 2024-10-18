@@ -1,6 +1,5 @@
 use super::Client as TrussedClient;
-use apdu_dispatch::iso7816::Status;
-use apdu_dispatch::{app as apdu, command, dispatch::Interface, response, Command as ApduCommand};
+use apdu_app::{CommandView, Interface, Status};
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
@@ -584,7 +583,7 @@ where
     }
 }
 
-impl<T, R, S, C> apdu::App<{ command::SIZE }, { response::SIZE }> for App<T, R, S, C>
+impl<T, R, S, C, const N: usize> apdu_app::App<N> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
@@ -594,9 +593,9 @@ where
     fn select(
         &mut self,
         _interface: Interface,
-        _apdu: &ApduCommand,
-        _reply: &mut response::Data,
-    ) -> apdu::Result {
+        _apdu: CommandView<'_>,
+        _reply: &mut apdu_app::Data<N>,
+    ) -> apdu_app::Result {
         Ok(())
     }
 
@@ -604,15 +603,15 @@ where
 
     fn call(
         &mut self,
-        interface: apdu::Interface,
-        apdu: &ApduCommand,
-        reply: &mut response::Data,
-    ) -> apdu::Result {
+        interface: Interface,
+        apdu: CommandView<'_>,
+        reply: &mut apdu_app::Data<N>,
+    ) -> apdu_app::Result {
         let instruction: u8 = apdu.instruction().into();
         let command = Command::try_from(instruction)?;
 
         // Reboot may only be called over USB
-        if command == Command::Reboot && interface != apdu::Interface::Contact {
+        if command == Command::Reboot && interface != Interface::Contact {
             return Err(Status::ConditionsOfUseNotSatisfied);
         }
 
@@ -622,7 +621,7 @@ where
         if command == Command::Update || command == Command::Version {
             self.exec(command, &[apdu.p1], reply)
         } else {
-            self.exec(command, apdu.data().as_slice(), reply)
+            self.exec(command, apdu.data(), reply)
         }
         .map_err(From::from)
     }
