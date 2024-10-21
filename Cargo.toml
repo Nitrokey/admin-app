@@ -11,7 +11,7 @@ description = "Administrative Trussed app for SoloKeys Solo 2 security keys"
 
 [dependencies]
 apdu-app = "0.1"
-cbor-smol = { version = "0.4.0", features = ["heapless-v0-7", "heapless-bytes-v0-3"] }
+cbor-smol = { version = "0.5.0", features = ["heapless-v0-7", "heapless-bytes-v0-3"] }
 ctaphid-dispatch = "0.1"
 delog = "0.1"
 iso7816 = "0.1"
@@ -47,4 +47,3 @@ littlefs2 = { git = "https://github.com/trussed-dev/littlefs2.git", rev = "ebd27
 trussed = { git = "https://github.com/Nitrokey/trussed.git", tag = "v0.1.0-nitrokey.18" }
 trussed-manage = { git = "https://github.com/trussed-dev/trussed-staging.git", tag = "manage-v0.1.0" }
 trussed-se050-manage = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", tag = "se050-manage-v0.1.0" }
-cbor-smol = { git = "https://github.com/trussed-dev/cbor-smol.git", rev = "4a368461e06e3ca52d79638b9ab8f34b038491fc" }

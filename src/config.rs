@@ -4,7 +4,7 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use cbor_smol::{cbor_deserialize, cbor_serialize_bytes};
+use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use littlefs2::{path, path::Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
@@ -303,8 +303,8 @@ pub fn save_filestore<F: Filestore, C: Config>(
                 .map_err(|_| ConfigError::WriteFailed)?;
         }
     } else {
-        let data: Message =
-            cbor_serialize_bytes(config).map_err(|_| ConfigError::SerializationFailed)?;
+        let mut data = Message::new();
+        cbor_serialize_to(config, &mut data).map_err(|_| ConfigError::SerializationFailed)?;
         store
             .write(FILENAME, LOCATION, &data)
             .map_err(|_| ConfigError::SerializationFailed)?;
@@ -319,7 +319,8 @@ pub fn save<T: Client, C: Config>(client: &mut T, config: &C) -> Result<(), Conf
                 .map_err(|_| ConfigError::WriteFailed)?;
         }
     } else {
-        let data = cbor_serialize_bytes(config).map_err(|_| ConfigError::SerializationFailed)?;
+        let mut data = Message::new();
+        cbor_serialize_to(config, &mut data).map_err(|_| ConfigError::SerializationFailed)?;
         try_syscall!(client.write_file(LOCATION, FILENAME.into(), data, None))
             .map_err(|_| ConfigError::WriteFailed)?;
     }
