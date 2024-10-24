@@ -5,7 +5,7 @@ use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
 #[cfg(feature = "factory-reset")]
-use littlefs2::path::PathBuf;
+use littlefs2_core::PathBuf;
 use serde::Deserialize;
 use trussed::store::Store;
 use trussed::try_syscall;
