@@ -449,6 +449,10 @@ where
                     response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
                     return Ok(());
                 };
+                let Ok(path) = PathBuf::try_from(client) else {
+                    response.push(FACTORY_RESET_APP_FAILED_PARSE).ok();
+                    return Ok(());
+                };
 
                 let Some((_, flag)) = self.config().reset_client_id(client) else {
                     response.push(FACTORY_RESET_APP_NOT_ALLOWED).ok();
@@ -460,7 +464,6 @@ where
                     response.push(FACTORY_RESET_NOT_CONFIRMED).ok();
                     return Ok(());
                 }
-                let path = PathBuf::from(client);
 
                 match self.config.reset_client_config(client) {
                     crate::config::ResetConfigResult::Changed => {
