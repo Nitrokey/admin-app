@@ -4,12 +4,12 @@ use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
 use ctaphid_dispatch::command::VendorCommand;
+use heapless::Vec;
 #[cfg(feature = "factory-reset")]
 use littlefs2_core::PathBuf;
 use serde::Deserialize;
-use trussed::store::Store;
-use trussed::try_syscall;
-use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
+use trussed::store::{filestore::Filestore, Store};
+use trussed_core::{syscall, try_syscall, InterruptFlag};
 
 use crate::config::{self, Config, ConfigError};
 use crate::migrations::Migrator;
