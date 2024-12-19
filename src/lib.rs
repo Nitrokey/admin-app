@@ -6,6 +6,8 @@
 //! It directly implements the APDU and CTAPHID dispatch App interfaces.
 #![no_std]
 
+use trussed_core::{CryptoClient, FilesystemClient, ManagementClient, UiClient};
+
 #[macro_use]
 extern crate delog;
 generate_macros!();
@@ -24,11 +26,26 @@ use trussed_manage::ManageClient;
 use trussed_se050_manage::Se050ManageClient;
 
 #[cfg(not(feature = "se050"))]
-pub trait Client: trussed::Client + ManageClient {}
+pub trait Client:
+    CryptoClient + FilesystemClient + ManagementClient + UiClient + ManageClient
+{
+}
 #[cfg(not(feature = "se050"))]
-impl<C: trussed::Client + ManageClient> Client for C {}
+impl<C: CryptoClient + FilesystemClient + ManagementClient + UiClient + ManageClient> Client for C {}
 
 #[cfg(feature = "se050")]
-pub trait Client: trussed::Client + Se050ManageClient + ManageClient {}
+pub trait Client:
+    CryptoClient + FilesystemClient + ManagementClient + UiClient + Se050ManageClient + ManageClient
+{
+}
 #[cfg(feature = "se050")]
-impl<C: trussed::Client + Se050ManageClient + ManageClient> Client for C {}
+impl<
+        C: CryptoClient
+            + FilesystemClient
+            + ManagementClient
+            + UiClient
+            + Se050ManageClient
+            + ManageClient,
+    > Client for C
+{
+}

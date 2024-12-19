@@ -5,14 +5,15 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
+use heapless::Vec;
 use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
-use trussed::{
-    store::filestore::Filestore,
+use trussed::store::filestore::Filestore;
+use trussed_core::{
     try_syscall,
-    types::{Location, Message, Vec},
-    Client,
+    types::{Location, Message},
+    FilesystemClient,
 };
 
 #[derive(Debug)]
@@ -312,7 +313,7 @@ pub fn save_filestore<F: Filestore, C: Config>(
     Ok(())
 }
 
-pub fn save<T: Client, C: Config>(client: &mut T, config: &C) -> Result<(), ConfigError> {
+pub fn save<T: FilesystemClient, C: Config>(client: &mut T, config: &C) -> Result<(), ConfigError> {
     if config == &Default::default() {
         if exists(client, LOCATION, FILENAME)? {
             try_syscall!(client.remove_file(LOCATION, FILENAME.into()))
@@ -327,7 +328,11 @@ pub fn save<T: Client, C: Config>(client: &mut T, config: &C) -> Result<(), Conf
     Ok(())
 }
 
-fn exists<T: Client>(client: &mut T, location: Location, path: &Path) -> Result<bool, ConfigError> {
+fn exists<T: FilesystemClient>(
+    client: &mut T,
+    location: Location,
+    path: &Path,
+) -> Result<bool, ConfigError> {
     try_syscall!(client.entry_metadata(location, path.into()))
         .map(|r| r.metadata.is_some())
         .map_err(|_| ConfigError::ReadFailed)

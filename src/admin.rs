@@ -2,14 +2,14 @@ use super::Client as TrussedClient;
 use apdu_app::{CommandView, Interface, Status};
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
-use ctaphid_dispatch::app::{self as hid, Command as HidCommand, Message};
-use ctaphid_dispatch::command::VendorCommand;
+use ctaphid_app::{self as hid, Command as HidCommand, VendorCommand};
+use heapless::Vec;
+use heapless_bytes::Bytes;
 #[cfg(feature = "factory-reset")]
 use littlefs2_core::PathBuf;
 use serde::Deserialize;
-use trussed::store::Store;
-use trussed::try_syscall;
-use trussed::{interrupt::InterruptFlag, store::filestore::Filestore, syscall, types::Vec};
+use trussed::store::{filestore::Filestore, Store};
+use trussed_core::{syscall, try_syscall, InterruptFlag};
 
 use crate::config::{self, Config, ConfigError};
 use crate::migrations::Migrator;
@@ -531,7 +531,7 @@ where
     }
 }
 
-impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
+impl<T, R, S, C, const N: usize> hid::App<'static, N> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
@@ -554,9 +554,9 @@ where
     fn call(
         &mut self,
         command: HidCommand,
-        input_data: &Message,
-        response: &mut Message,
-    ) -> hid::AppResult {
+        input_data: &[u8],
+        response: &mut Bytes<N>,
+    ) -> Result<(), hid::Error> {
         let (command, input) = if command == HidCommand::Vendor(ADMIN) {
             // new mode: first input byte specifies the actual command
             let (command, input) = input_data.split_first().ok_or(Error::InvalidLength)?;
@@ -564,7 +564,7 @@ where
             (command, input)
         } else {
             // old mode: directly use vendor commands + wink
-            (Command::try_from(command)?, input_data.as_slice())
+            (Command::try_from(command)?, input_data)
         };
         self.exec(command, input, response).map_err(From::from)
     }
