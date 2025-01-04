@@ -12,7 +12,7 @@ description = "Administrative Trussed app for SoloKeys Solo 2 security keys"
 [dependencies]
 apdu-app = "0.1"
 cbor-smol = { version = "0.5.0", features = ["heapless-v0-7", "heapless-bytes-v0-3"] }
-ctaphid-dispatch = "0.1"
+ctaphid-app = "0.1"
 delog = "0.1"
 heapless = "0.7"
 iso7816 = "0.1"
@@ -45,7 +45,7 @@ log-error = []
 migration-tests = ["dep:littlefs2"]
 
 [patch.crates-io]
-ctaphid-dispatch = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", branch = "trussed-core" }
+ctaphid-app = { git = "https://github.com/trussed-dev/ctaphid-dispatch.git", branch = "trait" }
 trussed = { git = "https://github.com/trussed-dev/trussed.git", branch = "core-modules" }
 trussed-core = { git = "https://github.com/trussed-dev/trussed.git", branch = "core-modules" }
 trussed-manage = { git = "https://github.com/trussed-dev/trussed-staging.git", branch = "trussed-core" }
