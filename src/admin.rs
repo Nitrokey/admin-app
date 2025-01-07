@@ -4,6 +4,7 @@ use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_app::{self as hid, Command as HidCommand, VendorCommand};
 use heapless::Vec;
+use heapless_bytes::Bytes;
 #[cfg(feature = "factory-reset")]
 use littlefs2_core::PathBuf;
 use serde::Deserialize;
@@ -554,7 +555,7 @@ where
         &mut self,
         command: HidCommand,
         input_data: &[u8],
-        response: &mut Vec<u8, N>,
+        response: &mut Bytes<N>,
     ) -> Result<(), hid::Error> {
         let (command, input) = if command == HidCommand::Vendor(ADMIN) {
             // new mode: first input byte specifies the actual command
