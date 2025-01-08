@@ -27,8 +27,8 @@ trussed-core = { version = "0.1.0-rc.1", features = ["crypto-client", "filesyste
 embedded-hal = { version = "0.2.7", optional = true }
 hex-literal = "0.4.1"
 rand_chacha = { version = "0.3.1", optional = true, default-features = false }
-trussed-manage = { version = "0.1.0" }
-trussed-se050-manage = { version = "0.1.0", optional = true }
+trussed-manage = { version = "0.2.0" }
+trussed-se050-manage = { version = "0.2.0", optional = true }
 
 [features]
 default = []
@@ -47,5 +47,3 @@ migration-tests = ["dep:littlefs2"]
 
 [patch.crates-io]
 trussed = { git = "https://github.com/trussed-dev/trussed.git", rev = "6bba8fde36d05c0227769eb63345744e87d84b2b" }
-trussed-manage = { git = "https://github.com/trussed-dev/trussed-staging.git", rev = "9355f700831c1a278c334f76382fbf98d82aedcd" }
-trussed-se050-manage = { git = "https://github.com/Nitrokey/trussed-se050-backend.git", rev = "a0bb4b92bffb2dc119fcc0cc47259ea7ed59d8a4" }
