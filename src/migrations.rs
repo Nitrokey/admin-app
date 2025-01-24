@@ -82,19 +82,17 @@ pub mod test_utils {
     }
 
     ram_storage!(
-        name=NoBackendStorage,
-        backend=RamDirect,
-        trait=littlefs2::driver::Storage,
-        erase_value=0xff,
-        read_size=16,
-        write_size=16,
-        cache_size_ty=littlefs2::consts::U512,
-        block_size=512,
-        block_count=128,
-        lookahead_size_ty=littlefs2::consts::U8,
-        filename_max_plus_one_ty=littlefs2::consts::U256,
-        path_max_plus_one_ty=littlefs2::consts::U256,
-        result=Result,
+        name = NoBackendStorage,
+        backend = RamDirect,
+        erase_value = 0xff,
+        read_size = 16,
+        write_size = 16,
+        cache_size_ty = littlefs2::consts::U512,
+        block_size = 512,
+        block_count = 128,
+        lookahead_size_ty = littlefs2::consts::U8,
+        filename_max_plus_one_ty = littlefs2::consts::U256,
+        path_max_plus_one_ty = littlefs2::consts::U256,
     );
 
     pub fn test_migration_one(
