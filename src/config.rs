@@ -5,7 +5,7 @@ use core::{
 };
 
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
-use heapless::Vec;
+use heapless::VecView;
 use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
@@ -269,10 +269,10 @@ impl From<ConfigError> for u8 {
     }
 }
 
-pub fn get<C: Config, const N: usize>(
+pub fn get<C: Config>(
     config: &mut C,
     key: &str,
-    response: &mut Vec<u8, N>,
+    response: &mut VecView<u8>,
 ) -> Result<(), ConfigError> {
     let field = config.field(key).ok_or(ConfigError::InvalidKey)?;
     write!(response, "{}", field).map_err(|_| ConfigError::DataTooLong)

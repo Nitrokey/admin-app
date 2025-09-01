@@ -1,10 +1,11 @@
 use super::Client as TrussedClient;
-use apdu_app::{CommandView, Interface, Status};
+use apdu_app::{CommandView, Interface};
 use cbor_smol::{cbor_deserialize, cbor_serialize_to};
 use core::{convert::TryInto, marker::PhantomData, time::Duration};
 use ctaphid_app::{self as hid, Command as HidCommand, VendorCommand};
-use heapless::Vec;
-use heapless_bytes::Bytes;
+use heapless::VecView;
+use heapless_bytes::BytesView;
+use iso7816::Status;
 #[cfg(feature = "factory-reset")]
 use littlefs2_core::PathBuf;
 use serde::Deserialize;
@@ -258,8 +259,8 @@ where
             return Err(ConfigError::InvalidValue);
         }
 
-        let internal = store.ifs();
-        let external = store.efs();
+        let internal = &*store.ifs();
+        let external = &*store.efs();
 
         for migration in self.migrations {
             if migration.version > current_version && migration.version <= to_version {
@@ -344,11 +345,11 @@ where
         user_present.is_ok()
     }
 
-    fn exec<const N: usize>(
+    fn exec(
         &mut self,
         command: Command,
         input: &[u8],
-        response: &mut Vec<u8, N>,
+        response: &mut VecView<u8>,
     ) -> Result<(), Error> {
         debug_now!("Executing command: {command:?}");
         match command {
@@ -429,7 +430,11 @@ where
                 response.push(status).ok();
             }
             Command::ListAvailableFields => {
-                cbor_serialize_to(&self.config.list_available_fields(), response).ok();
+                cbor_serialize_to::<_, &mut VecView<u8>>(
+                    &self.config.list_available_fields(),
+                    response,
+                )
+                .ok();
                 return Ok(());
             }
             #[cfg(feature = "factory-reset")]
@@ -492,11 +497,7 @@ where
         Ok(())
     }
 
-    fn get_config<const N: usize>(
-        &mut self,
-        input: &[u8],
-        response: &mut Vec<u8, N>,
-    ) -> Result<(), ConfigError> {
+    fn get_config(&mut self, input: &[u8], response: &mut VecView<u8>) -> Result<(), ConfigError> {
         let key = core::str::from_utf8(input).map_err(|_| ConfigError::InvalidKey)?;
         config::get(&mut self.config, key, response)
     }
@@ -531,7 +532,7 @@ where
     }
 }
 
-impl<T, R, S, C, const N: usize> hid::App<'static, N> for App<T, R, S, C>
+impl<T, R, S, C> hid::App<'static> for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
@@ -555,7 +556,7 @@ where
         &mut self,
         command: HidCommand,
         input_data: &[u8],
-        response: &mut Bytes<N>,
+        response: &mut BytesView,
     ) -> Result<(), hid::Error> {
         let (command, input) = if command == HidCommand::Vendor(ADMIN) {
             // new mode: first input byte specifies the actual command
@@ -566,7 +567,8 @@ where
             // old mode: directly use vendor commands + wink
             (Command::try_from(command)?, input_data)
         };
-        self.exec(command, input, response).map_err(From::from)
+        self.exec(command, input, response.as_mut())
+            .map_err(From::from)
     }
 
     fn interrupt(&self) -> Option<&'static InterruptFlag> {
@@ -586,7 +588,7 @@ where
     }
 }
 
-impl<T, R, S, C, const N: usize> apdu_app::App<N> for App<T, R, S, C>
+impl<T, R, S, C> apdu_app::App for App<T, R, S, C>
 where
     T: TrussedClient,
     R: Reboot,
@@ -597,7 +599,7 @@ where
         &mut self,
         _interface: Interface,
         _apdu: CommandView<'_>,
-        _reply: &mut apdu_app::Data<N>,
+        _reply: &mut heapless::VecView<u8>,
     ) -> apdu_app::Result {
         Ok(())
     }
@@ -608,7 +610,7 @@ where
         &mut self,
         interface: Interface,
         apdu: CommandView<'_>,
-        reply: &mut apdu_app::Data<N>,
+        reply: &mut heapless::VecView<u8>,
     ) -> apdu_app::Result {
         let instruction: u8 = apdu.instruction().into();
         let command = Command::try_from(instruction)?;
