@@ -259,8 +259,8 @@ where
             return Err(ConfigError::InvalidValue);
         }
 
-        let internal = &*store.ifs();
-        let external = &*store.efs();
+        let internal = store.ifs();
+        let external = store.efs();
 
         for migration in self.migrations {
             if migration.version > current_version && migration.version <= to_version {

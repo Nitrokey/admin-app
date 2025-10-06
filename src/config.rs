@@ -48,6 +48,12 @@ use trussed_core::{
 /// ```
 pub struct ResetSignalAllocation(AtomicU8);
 
+impl Default for ResetSignalAllocation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResetSignalAllocation {
     pub const fn new() -> Self {
         Self(AtomicU8::new(ResetSignal::None as u8))
