@@ -9,7 +9,7 @@ use heapless::VecView;
 use littlefs2_core::{path, Path};
 use serde::{de::DeserializeOwned, Serialize};
 use strum_macros::FromRepr;
-use trussed::store::filestore::Filestore;
+use trussed::store::Filestore;
 use trussed_core::{
     try_syscall,
     types::{Location, Message},
@@ -373,7 +373,7 @@ mod tests {
             destructive: true,
             ty: FieldType::Bool,
         }];
-        let mut bytes: trussed::types::Vec<u8, 100> = Default::default();
+        let mut bytes: heapless::Vec<u8, 100> = Default::default();
         cbor_smol::cbor_serialize_to(fields, &mut bytes).unwrap();
         assert_eq!(
             &bytes,
